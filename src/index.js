@@ -132,6 +132,7 @@ function askChore(intent, session, callback) {
     var sessionAttributes = {};
     var choreCounter = 0;
     var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage"];
+    var MAX_CHORE = 3;
     
     if(session.attributes) {
       sessionAttributes = session.attributes;
@@ -149,7 +150,7 @@ function askChore(intent, session, callback) {
        speechOutput = "first question, have you gotten dressed";
        sessionAttributes.choreCounter = 0;
        console.log("set sessionAttributes.choreCounter = 0")
-    }else {
+    }else if(sessionAttributes.choreCounter < MAX_CHORE) {
        console.log("some chores, " + sessionAttributes.choreCounter);
        console.log("next ask " + asks[sessionAttributes.choreCounter]);
        var myChore = intent.slots.Chore;
@@ -158,11 +159,8 @@ function askChore(intent, session, callback) {
        sessionAttributes.choreCounter += 1;
        console.log("chore counter = " + sessionAttributes.choreCounter.value);
        speechOutput = asks[sessionAttributes.choreCounter];
-       //if(sessionAttributes.choreCounter.value == 2) {
-        //  speechOutput = "another question, have you done homework";
-       //}else {
-        //  speechOutput = "another question, have you gotten dressed";
-       //}
+    } else {
+        speechOutput = "Yes, you may have more screen time";
     }
     var shouldEndSession = false;
     repromptText = "bla";
@@ -171,39 +169,6 @@ function askChore(intent, session, callback) {
          buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
 }
 
-/*
-function createFavoriteColorAttributes(favoriteColor) {
-    return {
-        favoriteColor: favoriteColor
-    };
-}
-
-function getColorFromSession(intent, session, callback) {
-    var favoriteColor;
-    var repromptText = null;
-    var sessionAttributes = {};
-    var shouldEndSession = false;
-    var speechOutput = "";
-
-    if (session.attributes) {
-        favoriteColor = session.attributes.favoriteColor;
-    }
-
-    if (favoriteColor) {
-        speechOutput = "Your favorite color is " + favoriteColor + ". Goodbye.";
-        shouldEndSession = true;
-    } else {
-        speechOutput = "I'm not sure what your favorite color is, you can say, my favorite color " +
-            " is red";
-    }
-
-    // Setting repromptText to null signifies that we do not want to reprompt the user.
-    // If the user does not respond or says something that is not understood, the session
-    // will end.
-    callback(sessionAttributes,
-         buildSpeechletResponse(intent.name, speechOutput, repromptText, shouldEndSession));
-}
-*/
 
 // --------------- Helpers that build all of the responses -----------------------
 
