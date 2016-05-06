@@ -79,6 +79,8 @@ function onIntent(intentRequest, session, callback) {
         askChore(intent, session, callback);
     } else if ("IHaveIntent" === intentName) {
         askChore(intent, session, callback);
+    } else if ("IHaveNotIntent" === intentName) {
+        screenTimeDenied(intent, session, callback);
     } else if ("ScreenIntent" === intentName) {
         askChore(intent, session, callback);
     } else if ("AMAZON.HelpIntent" === intentName) {
@@ -121,6 +123,15 @@ function handleSessionEndRequest(callback) {
     var shouldEndSession = true;
 
     callback({}, buildSpeechletResponse(cardTitle, speechOutput, null, shouldEndSession));
+}
+
+function screenTimeDenied(intent, session, callback) {
+    console.log("top of screenTimeDenied intent:" + intent.name);
+    var sessionAttributes = {};
+    speechOutput = "You have not completed all your chores so you may not have more screen time until you do them all."
+    var shouldEndSession = false;
+    callback(sessionAttributes,
+         buildSpeechletResponse("Request Denied", speechOutput, "bla", shouldEndSession));
 }
 
 /**
