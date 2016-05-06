@@ -1,11 +1,15 @@
 /**
  * This sample demonstrates a simple skill built with the Amazon Alexa Skills Kit.
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
- * testing instructions are located at http://amzn.to/1LzFrj6
+ * testing instructions are located at https://github.com/btarbox/alexa-more-screen-time
  *
  * For additional samples, visit the Alexa Skills Kit Getting Started guide at
  * http://amzn.to/1LGWsLG
  */
+
+var chores = ["homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
+var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage", "have you eaten breakfast", "have you packed lunch"];
+var MAX_CHORE = 5;
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest,
 // etc.) The JSON body of the request is provided in the event parameter.
@@ -128,7 +132,22 @@ function handleSessionEndRequest(callback) {
 function screenTimeDenied(intent, session, callback) {
     console.log("top of screenTimeDenied intent:" + intent.name);
     var sessionAttributes = {};
+    if(session.attributes) {
+       sessionAttributes = session.attributes;
+    }
+    if (typeof sessionAttributes.choreCounter == "undefined")  {
+        console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
+        sessionAttributes.choreCounter = 1;
+    }     
     speechOutput = "You have not completed all your chores so you may not have more screen time until you do them all."
+    speechOutput += "You have done ";
+    for(var i=1; i < sessionAttributes.choreCounter; i++) {
+        speechOutput += chores[i] + " ";
+    }
+    speechOutput += " but you have not done ";
+    for(var i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
+        speechOutput += chores[i] + " ";
+    }
     var shouldEndSession = false;
     callback(sessionAttributes,
          buildSpeechletResponse("Request Denied", speechOutput, "bla", shouldEndSession));
@@ -142,8 +161,6 @@ function askChore(intent, session, callback) {
     var cardTitle = "ChoreDressed";
     var sessionAttributes = {};
     var choreCounter = 0;
-    var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage"];
-    var MAX_CHORE = 3;
     
     if(session.attributes) {
       sessionAttributes = session.attributes;
