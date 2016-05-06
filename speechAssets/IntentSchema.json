@@ -1,0 +1,28 @@
+{
+  "intents": [
+    {
+      "intent": "ScreenIntent"
+    },
+    {
+      "intent": "HaveYouIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
+      "intent": "IHaveIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
+      "intent": "AMAZON.HelpIntent"
+    }
+  ]
+}

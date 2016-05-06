@@ -1,0 +1,4 @@
+creenIntent I want more screen time
+ScreenIntent give me screen time
+HaveYouIntent have you {Chore}
+IHaveIntent I have {Chore}
