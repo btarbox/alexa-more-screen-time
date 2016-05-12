@@ -7,12 +7,11 @@
  * http://amzn.to/1LGWsLG
  */
 
-var chores = ["homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
-var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage", "have you eaten breakfast", "have you packed lunch"];
-var MAX_CHORE = 5;
+var chores = ["done homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
+//var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage", "have you eaten breakfast", "have you packed lunch"];
+var MAX_CHORE = chores.length;
 
-// Route the incoming request based on type (LaunchRequest, IntentRequest,
-// etc.) The JSON body of the request is provided in the event parameter.
+// Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) The JSON body of the request is provided in the event parameter.
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
@@ -111,7 +110,7 @@ function getWelcomeResponse(callback) {
     // If we wanted to initialize the session to have some attributes we could add those here.
     var sessionAttributes = {};
     var cardTitle = "Welcome";
-    var speechOutput = "Welcome to screen time. Have you done chore get dressed?";
+    var speechOutput = "Welcome to screen time. Have you " + chores[1];
     // If the user either does not reply to the welcome message or says something that is not
     // understood, they will be prompted again with this text.
     var repromptText = "something about chores";
@@ -139,13 +138,13 @@ function screenTimeDenied(intent, session, callback) {
         console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
         sessionAttributes.choreCounter = 1;
     }     
-    speechOutput = "You have not completed all your chores so you may not have more screen time until you do them all."
-    speechOutput += "You have done ";
+    speechOutput = "You have not completed all your chores so you may not have more screen time <break time=\"1s\"/> ";
+    speechOutput += "You have ";
     for(var i=1; i < sessionAttributes.choreCounter; i++) {
         speechOutput += chores[i] + " ";
     }
-    speechOutput += " but you have not done ";
-    for(var i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
+    speechOutput += " <break time=\"1s\"/> but you have not ";
+    for(i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
         speechOutput += chores[i] + " ";
     }
     var shouldEndSession = false;
@@ -165,10 +164,10 @@ function askChore(intent, session, callback) {
     if(session.attributes) {
       sessionAttributes = session.attributes;
     }
-    console.log("got here too")
+    console.log("got here too");
     if (typeof sessionAttributes.choreCounter == "undefined")  {
         console.log("sessionAttributes.choreCounter is undefined");
-        sessionAttributes.choreCounter = 0;
+        sessionAttributes.choreCounter = 1;
     } else {
         console.log("chore counter is " + sessionAttributes.choreCounter);
     }
@@ -176,17 +175,17 @@ function askChore(intent, session, callback) {
     if(!intent.slots.Chore) {
        console.log("no chore yet, must be first time");
        speechOutput = "first question, have you gotten dressed";
-       sessionAttributes.choreCounter = 0;
-       console.log("set sessionAttributes.choreCounter = 0")
+       sessionAttributes.choreCounter = 1;
+       console.log("set sessionAttributes.choreCounter = 0");
     }else if(sessionAttributes.choreCounter < MAX_CHORE) {
        console.log("some chores, " + sessionAttributes.choreCounter);
-       console.log("next ask " + asks[sessionAttributes.choreCounter]);
+       console.log("next ask " + chores[sessionAttributes.choreCounter]);
        var myChore = intent.slots.Chore;
      
        //sessionAttributes.chores = session.attributes.chores;
-       sessionAttributes.choreCounter += 1;
        console.log("chore counter = " + sessionAttributes.choreCounter.value);
-       speechOutput = asks[sessionAttributes.choreCounter];
+       speechOutput = "have you " + chores[sessionAttributes.choreCounter];
+       sessionAttributes.choreCounter += 1;
     } else {
         speechOutput = "Yes, you may have more screen time";
     }

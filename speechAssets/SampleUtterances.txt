@@ -1,11 +1,14 @@
-creenIntent I want more screen time
+ScreenIntent I want more screen time
 ScreenIntent give me screen time
 HaveYouIntent have you {Chore}
 IHaveIntent I have {Chore}
 IHaveIntent yes
 IHaveIntent yes Ive done the chore
 IHaveIntent yes Ive done {Chore}
+IHaveIntent yup
+IHaveIntent yup I did that
 IHaveNotIntent no
 IHaveNotIntent do I have to
 IHaveNotIntent Ill do it later
 IHaveNotIntent maybe
+IHaveNotIntent I dont know
