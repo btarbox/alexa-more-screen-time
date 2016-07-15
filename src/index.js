@@ -15,6 +15,7 @@ var MAX_CHORE = chores.length;
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
+        console.log("event.session.user.userId=" + event.session.user.userId)  /* ID of the user making the request */
 
         /**
          * Uncomment this if statement and populate with your skill's application ID to
@@ -138,12 +139,12 @@ function screenTimeDenied(intent, session, callback) {
         console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
         sessionAttributes.choreCounter = 1;
     }     
-    speechOutput = "You have not completed all your chores so you may not have more screen time <break time=\"1s\"/> ";
+    speechOutput = "You have not completed all your chores so you may not have more screen time ";
     speechOutput += "You have ";
     for(var i=1; i < sessionAttributes.choreCounter; i++) {
         speechOutput += chores[i] + " ";
     }
-    speechOutput += " <break time=\"1s\"/> but you have not ";
+    speechOutput += " but you have not ";
     for(i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
         speechOutput += chores[i] + " ";
     }
