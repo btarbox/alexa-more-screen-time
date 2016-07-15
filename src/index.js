@@ -10,22 +10,38 @@
 var chores = ["done homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
 //var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage", "have you eaten breakfast", "have you packed lunch"];
 var MAX_CHORE = chores.length;
+var aws = require('aws-sdk');
+var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) The JSON body of the request is provided in the event parameter.
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
         console.log("event.session.user.userId=" + event.session.user.userId)  /* ID of the user making the request */
-
-        /**
-         * Uncomment this if statement and populate with your skill's application ID to
-         * prevent someone else from configuring a skill that sends requests to this function.
-         */
-        /*
-        if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.[unique-value-here]") {
+        const bucket = "lambdaeventsource"
+        const key = "MoreScreenTime/DefaultChores.txt"
+        const params = {
+         Bucket: bucket,
+            Key: key
+        };
+        console.log("about to get s3 object with chore list")
+        s3.getObject(params, function(err, data) {
+            if (err) {
+                console.log("not found " + err)
+                context.fail(message);
+            } else {
+                console.log('found file ', data.ContentType)
+                var body = data.Body.toString('ascii')
+                console.log("body: " + body)
+                context.succeed(data.ContentType);
+            }
+        })
+        Sleep(2)
+        console.log("past the s3 stuff")
+        
+        if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.068e04ab-9c69-4da2-9b0b-018333c82a48") {
              context.fail("Invalid Application ID");
         }
-        */
 
         if (event.session.new) {
             onSessionStarted({requestId: event.request.requestId}, event.session);
@@ -111,7 +127,7 @@ function getWelcomeResponse(callback) {
     // If we wanted to initialize the session to have some attributes we could add those here.
     var sessionAttributes = {};
     var cardTitle = "Welcome";
-    var speechOutput = "Welcome to screen time. Have you " + chores[1];
+    var speechOutput = "Welcome to screen time. Have you " + chores[0];
     // If the user either does not reply to the welcome message or says something that is not
     // understood, they will be prompted again with this text.
     var repromptText = "something about chores";
@@ -139,18 +155,18 @@ function screenTimeDenied(intent, session, callback) {
         console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
         sessionAttributes.choreCounter = 1;
     }     
-    speechOutput = "You have not completed all your chores so you may not have more screen time ";
+    speechOutput = "You have not completed all your chores so you may not have more screen time  ";
     speechOutput += "You have ";
     for(var i=1; i < sessionAttributes.choreCounter; i++) {
         speechOutput += chores[i] + " ";
     }
-    speechOutput += " but you have not ";
+    speechOutput += "  but you have not ";
     for(i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
         speechOutput += chores[i] + " ";
     }
     var shouldEndSession = false;
     callback(sessionAttributes,
-         buildSpeechletResponse("Request Denied", speechOutput, "bla", shouldEndSession));
+         buildSpeechletResponse("Request Denied", speechOutput, "goodbye", shouldEndSession));
 }
 
 /**
@@ -160,7 +176,7 @@ function askChore(intent, session, callback) {
     console.log("top of askChore intent:" + intent.name);
     var cardTitle = "ChoreDressed";
     var sessionAttributes = {};
-    var choreCounter = 0;
+    var choreCounter = 2;
     
     if(session.attributes) {
       sessionAttributes = session.attributes;
@@ -173,6 +189,7 @@ function askChore(intent, session, callback) {
         console.log("chore counter is " + sessionAttributes.choreCounter);
     }
     console.log("here");
+    var shouldEndSession = false;
     if(!intent.slots.Chore) {
        console.log("no chore yet, must be first time");
        speechOutput = "first question, have you gotten dressed";
@@ -189,8 +206,8 @@ function askChore(intent, session, callback) {
        sessionAttributes.choreCounter += 1;
     } else {
         speechOutput = "Yes, you may have more screen time";
+        shouldEndSession = true
     }
-    var shouldEndSession = false;
     repromptText = "bla";
 
     callback(sessionAttributes,
