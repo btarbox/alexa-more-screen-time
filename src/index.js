@@ -17,7 +17,7 @@ var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
-        console.log("event.session.user.userId=" + event.session.user.userId)  /* ID of the user making the request */
+        console.log("event.session.user.userId=" + event.session.user.userId);  /* ID of the user making the request */
         // getChoreList(context)
         
         if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.068e04ab-9c69-4da2-9b0b-018333c82a48") {
@@ -50,35 +50,35 @@ exports.handler = function (event, context) {
 };
 
 function getChoreList(context, callback) {
-    const bucket = "lambdaeventsource"
-    const key = "MoreScreenTime/DefaultChores.txt"
+    const bucket = "lambdaeventsource";
+    const key = "MoreScreenTime/DefaultChores.txt";
     const params = {
         Bucket: bucket,
         Key: key
     };
-    console.log("about to get s3 object with chore list")
+    console.log("about to get s3 object with chore list");
     s3.getObject(params, function(err, data) {
         if (err) {
-            console.log("not found " + err)
+            console.log("not found " + err);
             context.fail(message);
         } else {
-            console.log('found file ', data.ContentType)
-            var body = data.Body.toString('ascii')
-            console.log("file contents: " + body)
+            console.log('found file ', data.ContentType);
+            var body = data.Body.toString('ascii');
+            console.log("file contents: " + body);
             // var str = "123, 124, 234,252";
-            var chorelist = body.split(",")
+            var chorelist = body.split(",");
             // var arr = body.split(",").map(function (val) { return +val + 1; });
-            console.log("split chores into array (hopefully) " + chorelist)
-            console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";")
-
+            console.log("split chores into array (hopefully) " + chorelist);
+            console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
+            MAX_CHORE = chorelist.length;
             // context.succeed(data.ContentType); // call this if function is called within another function?
-            console.log("about to call getWelcomeResponse with callback")
+            console.log("about to call getWelcomeResponse with callback");
             getWelcomeResponse(callback, chorelist);  // Dispatch to the skill's launch.
         }
-    })
+    });
     // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never
     // has a chance to finish
-    console.log("past the s3 stuff")
+    console.log("past the s3 stuff");
 }
 
 /**
@@ -94,7 +94,7 @@ function onSessionStarted(sessionStartedRequest, session) {
 function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
 
-    getChoreList(context, callback)
+    getChoreList(context, callback);
     // getWelcomeResponse(callback);  // Dispatch to your skill's launch.
 }
 
@@ -138,13 +138,16 @@ function onSessionEnded(sessionEndedRequest, session) {
 
 function getWelcomeResponse(callback, chorelist) {
     // If we wanted to initialize the session to have some attributes we could add those here.
-    console.log("at getWelcomeResponse with " + chorelist.length + " chores.")
+    console.log("at getWelcomeResponse with " + chorelist.length + " chores.");
     var sessionAttributes = {};
-    sessionAttributes.chorelist = chorelist
-    console.log("assigned chorelist parameter to sessionAttributes")
+    sessionAttributes.chorelist = chorelist;
+    console.log("assigned chorelist parameter to sessionAttributes");
     
     var cardTitle = "Welcome";
-    var speechOutput = "Welcome to screen time. Have you " + chores[0];
+    var speechOutput1 = "<p>Welcome to screen time.</p>  Have you " + chorelist[0]; 
+    var speechOutput = "<speak>" + speechOutput1 + "</speak>";
+    // speechOutput = speechOutput.replace('"', ' ')
+    console.log("about to say:" + speechOutput + ".");
     // If the user either does not reply to the welcome message or says something that is not
     // understood, they will be prompted again with this text.
     var repromptText = "something about chores";
@@ -172,18 +175,19 @@ function screenTimeDenied(intent, session, callback) {
         console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
         sessionAttributes.choreCounter = 1;
     }     
-    speechOutput = "You have not completed all your chores so you may not have more screen time  ";
+    speechOutput = "<p>You have not completed all your chores so you may not have more screen time</p>";
     speechOutput += "You have ";
-    for(var i=1; i < sessionAttributes.choreCounter; i++) {
-        speechOutput += chores[i] + " ";
+    for(var i=0; i < sessionAttributes.choreCounter; i++) {
+        speechOutput += sessionAttributes.chorelist[i] + " ";
     }
     speechOutput += "  but you have not ";
     for(i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
-        speechOutput += chores[i] + " ";
+        speechOutput += sessionAttributes.chorelist[i] + " ";
     }
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     var shouldEndSession = false;
     callback(sessionAttributes,
-         buildSpeechletResponse("Request Denied", speechOutput, "goodbye", shouldEndSession));
+         buildSpeechletResponse("Request Denied", speechOutput2, "goodbye", shouldEndSession));
 }
 
 /**
@@ -225,16 +229,18 @@ function askChore(intent, session, callback) {
      
        //sessionAttributes.chores = session.attributes.chores;
        console.log("chore counter = " + sessionAttributes.choreCounter.value);
-       speechOutput = "have you " + chores[sessionAttributes.choreCounter];
+       // speechOutput = "have you " + chores[sessionAttributes.choreCounter];
+       speechOutput = "have you " + sessionAttributes.chorelist[sessionAttributes.choreCounter];
        sessionAttributes.choreCounter += 1;
     } else {
-        speechOutput = "Yes, you may have more screen time";
+        speechOutput = "<p>Yes,</p> you may have more screen time";
         shouldEndSession = true
     }
     repromptText = "bla";
 
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     callback(sessionAttributes,
-         buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
+         buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
 
 
@@ -243,8 +249,8 @@ function askChore(intent, session, callback) {
 function buildSpeechletResponse(title, output, repromptText, shouldEndSession) {
     return {
         outputSpeech: {
-            type: "PlainText",
-            text: output
+            "type": "SSML",
+            "ssml": output // "<speak><p>This output speech</p> uses SSML</speak>"
         },
         card: {
             type: "Simple",
