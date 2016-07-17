@@ -3,41 +3,22 @@
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
  * testing instructions are located at https://github.com/btarbox/alexa-more-screen-time
  *
- * For additional samples, visit the Alexa Skills Kit Getting Started guide at
- * http://amzn.to/1LGWsLG
+ * Wabi Sabi Software, all rights reserved, 2016
  */
 
-var chores = ["done homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
-//var asks = ["have you done homework?", "have you gotten dressed?", "have you fed the animals", "have you taken out the garbage", "have you eaten breakfast", "have you packed lunch"];
+var chores = ["done homework", "gotten dressed", "fed the animals"]; // short list for testing
+//var chores = ["done homework", "gotten dressed", "fed the animals", "taken out the garbage", "eaten breakfast", "packed lunch"];
 var MAX_CHORE = chores.length;
 var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 
-// Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) The JSON body of the request is provided in the event parameter.
+// Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
+// The JSON body of the request is provided in the event parameter.
 exports.handler = function (event, context) {
     try {
         console.log("event.session.application.applicationId=" + event.session.application.applicationId);
         console.log("event.session.user.userId=" + event.session.user.userId)  /* ID of the user making the request */
-        const bucket = "lambdaeventsource"
-        const key = "MoreScreenTime/DefaultChores.txt"
-        const params = {
-         Bucket: bucket,
-            Key: key
-        };
-        console.log("about to get s3 object with chore list")
-        s3.getObject(params, function(err, data) {
-            if (err) {
-                console.log("not found " + err)
-                context.fail(message);
-            } else {
-                console.log('found file ', data.ContentType)
-                var body = data.Body.toString('ascii')
-                console.log("body: " + body)
-                context.succeed(data.ContentType);
-            }
-        })
-        Sleep(2)
-        console.log("past the s3 stuff")
+        // getChoreList(context)
         
         if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.068e04ab-9c69-4da2-9b0b-018333c82a48") {
              context.fail("Invalid Application ID");
@@ -48,7 +29,7 @@ exports.handler = function (event, context) {
         }
 
         if (event.request.type === "LaunchRequest") {
-            onLaunch(event.request,
+            onLaunch(context, event.request,
                      event.session,
                      function callback(sessionAttributes, speechletResponse) {
                           context.succeed(buildResponse(sessionAttributes, speechletResponse));
@@ -62,11 +43,43 @@ exports.handler = function (event, context) {
         } else if (event.request.type === "SessionEndedRequest") {
             onSessionEnded(event.request, event.session);
             context.succeed();
-        }
+        } 
     } catch (e) {
         context.fail("Exception: " + e);
     }
 };
+
+function getChoreList(context, callback) {
+    const bucket = "lambdaeventsource"
+    const key = "MoreScreenTime/DefaultChores.txt"
+    const params = {
+        Bucket: bucket,
+        Key: key
+    };
+    console.log("about to get s3 object with chore list")
+    s3.getObject(params, function(err, data) {
+        if (err) {
+            console.log("not found " + err)
+            context.fail(message);
+        } else {
+            console.log('found file ', data.ContentType)
+            var body = data.Body.toString('ascii')
+            console.log("file contents: " + body)
+            // var str = "123, 124, 234,252";
+            var chorelist = body.split(",")
+            // var arr = body.split(",").map(function (val) { return +val + 1; });
+            console.log("split chores into array (hopefully) " + chorelist)
+            console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";")
+
+            // context.succeed(data.ContentType); // call this if function is called within another function?
+            console.log("about to call getWelcomeResponse with callback")
+            getWelcomeResponse(callback, chorelist);  // Dispatch to the skill's launch.
+        }
+    })
+    // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never
+    // has a chance to finish
+    console.log("past the s3 stuff")
+}
 
 /**
  * Called when the session starts.
@@ -78,11 +91,11 @@ function onSessionStarted(sessionStartedRequest, session) {
 /**
  * Called when the user launches the skill without specifying what they want.
  */
-function onLaunch(launchRequest, session, callback) {
+function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
 
-    // Dispatch to your skill's launch.
-    getWelcomeResponse(callback);
+    getChoreList(context, callback)
+    // getWelcomeResponse(callback);  // Dispatch to your skill's launch.
 }
 
 /**
@@ -123,9 +136,13 @@ function onSessionEnded(sessionEndedRequest, session) {
 
 // --------------- Functions that control the skill's behavior -----------------------
 
-function getWelcomeResponse(callback) {
+function getWelcomeResponse(callback, chorelist) {
     // If we wanted to initialize the session to have some attributes we could add those here.
+    console.log("at getWelcomeResponse with " + chorelist.length + " chores.")
     var sessionAttributes = {};
+    sessionAttributes.chorelist = chorelist
+    console.log("assigned chorelist parameter to sessionAttributes")
+    
     var cardTitle = "Welcome";
     var speechOutput = "Welcome to screen time. Have you " + chores[0];
     // If the user either does not reply to the welcome message or says something that is not
@@ -180,6 +197,12 @@ function askChore(intent, session, callback) {
     
     if(session.attributes) {
       sessionAttributes = session.attributes;
+      console.log("got session.attributes")
+      if(typeof sessionAttributes.chorelist == "undefined") {
+          console.log("sadly, no chorelist in sessionAttributes")
+      } else {
+          console.log("got chorelist from sessionAttributes, length: " + sessionAttributes.chorelist.length)
+      }
     }
     console.log("got here too");
     if (typeof sessionAttributes.choreCounter == "undefined")  {
