@@ -31,6 +31,15 @@
       ]
     },
     {
+      "intent": "ConfigurationIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
       "intent": "AMAZON.HelpIntent"
     }
   ]

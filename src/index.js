@@ -120,6 +120,8 @@ function onIntent(intentRequest, session, callback) {
         getWelcomeResponse(callback);
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
         handleSessionEndRequest(callback);
+    } else if ("ConfigurationIntent" == intentName) {
+        handleConfigurationRequest(callback);
     } else {
         throw "Invalid intent";
     }
@@ -134,6 +136,18 @@ function onSessionEnded(sessionEndedRequest, session) {
     // Add cleanup logic here
 }
 
+function handleConfigurationRequest(callback) {
+    console.log("at handleConfigurationRequest")
+    var sessionAttributes = {};
+    var cardTitle = "Welcome";
+    var speechOutput1 = "<p>Do you want to list chores or edit chores?</p>"; 
+    var speechOutput = "<speak>" + speechOutput1 + "</speak>";
+
+    var repromptText = "Do you want to list chores or edit chores?";
+    var shouldEndSession = false;
+
+    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
+}
 // --------------- Functions that control the skill's behavior -----------------------
 
 function getWelcomeResponse(callback, chorelist) {
@@ -158,7 +172,7 @@ function getWelcomeResponse(callback, chorelist) {
 
 function handleSessionEndRequest(callback) {
     var cardTitle = "Session Ended";
-    var speechOutput = "Thank you for trying the Alexa Skills Kit sample. Have a nice day!";
+    var speechOutput = "Thank you for using more screen time";
     // Setting this to true ends the session and exits the skill.
     var shouldEndSession = true;
 
@@ -173,8 +187,10 @@ function screenTimeDenied(intent, session, callback) {
     }
     if (typeof sessionAttributes.choreCounter == "undefined")  {
         console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
-        sessionAttributes.choreCounter = 1;
-    }     
+        sessionAttributes.choreCounter = 0;
+    } else {
+        sessionAttributes.choreCounter = sessionAttributes.choreCounter -1
+    }    
     speechOutput = "<p>You have not completed all your chores so you may not have more screen time</p>";
     speechOutput += "You have ";
     for(var i=0; i < sessionAttributes.choreCounter; i++) {
@@ -185,7 +201,7 @@ function screenTimeDenied(intent, session, callback) {
         speechOutput += sessionAttributes.chorelist[i] + " ";
     }
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
-    var shouldEndSession = false;
+    var shouldEndSession = true;
     callback(sessionAttributes,
          buildSpeechletResponse("Request Denied", speechOutput2, "goodbye", shouldEndSession));
 }

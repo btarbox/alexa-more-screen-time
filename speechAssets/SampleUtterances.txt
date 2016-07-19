@@ -12,3 +12,6 @@ IHaveNotIntent do I have to
 IHaveNotIntent Ill do it later
 IHaveNotIntent maybe
 IHaveNotIntent I dont know
+ConfigurationIntent Configuration
+ConfigurationIntent Config
+ConfigurationIntent configure chores
