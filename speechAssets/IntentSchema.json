@@ -40,6 +40,24 @@
       ]
     },
     {
+      "intent": "ListChoresIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
+      "intent": "EndConfigurationIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
       "intent": "AMAZON.HelpIntent"
     }
   ]

@@ -15,3 +15,7 @@ IHaveNotIntent I dont know
 ConfigurationIntent Configuration
 ConfigurationIntent Config
 ConfigurationIntent configure chores
+ListChoresIntent list
+ListChoresIntent list chores
+ListChoresIntent list the chores
+EndConfigurationIntent end

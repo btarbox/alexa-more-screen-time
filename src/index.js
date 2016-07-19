@@ -16,9 +16,8 @@ var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 // The JSON body of the request is provided in the event parameter.
 exports.handler = function (event, context) {
     try {
-        console.log("event.session.application.applicationId=" + event.session.application.applicationId);
-        console.log("event.session.user.userId=" + event.session.user.userId);  /* ID of the user making the request */
-        // getChoreList(context)
+        //console.log("event.session.application.applicationId=" + event.session.application.applicationId);
+        //console.log("event.session.user.userId=" + event.session.user.userId);  /* ID of the user making the request */
         
         if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.068e04ab-9c69-4da2-9b0b-018333c82a48") {
              context.fail("Invalid Application ID");
@@ -49,30 +48,28 @@ exports.handler = function (event, context) {
     }
 };
 
-function getChoreList(context, callback) {
+function getChoreList(callback) {
     const bucket = "lambdaeventsource";
     const key = "MoreScreenTime/DefaultChores.txt";
     const params = {
         Bucket: bucket,
         Key: key
     };
-    console.log("about to get s3 object with chore list");
+    // console.log("about to get s3 object with chore list");
     s3.getObject(params, function(err, data) {
         if (err) {
             console.log("not found " + err);
-            context.fail(message);
         } else {
-            console.log('found file ', data.ContentType);
+            // console.log('found file ', data.ContentType);
             var body = data.Body.toString('ascii');
-            console.log("file contents: " + body);
+            // console.log("file contents: " + body);
             // var str = "123, 124, 234,252";
             var chorelist = body.split(",");
             // var arr = body.split(",").map(function (val) { return +val + 1; });
-            console.log("split chores into array (hopefully) " + chorelist);
-            console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
+            // console.log("split chores into array (hopefully) " + chorelist);
+            // console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
             MAX_CHORE = chorelist.length;
-            // context.succeed(data.ContentType); // call this if function is called within another function?
-            console.log("about to call getWelcomeResponse with callback");
+            // console.log("about to call getWelcomeResponse with callback");
             getWelcomeResponse(callback, chorelist);  // Dispatch to the skill's launch.
         }
     });
@@ -94,8 +91,7 @@ function onSessionStarted(sessionStartedRequest, session) {
 function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
 
-    getChoreList(context, callback);
-    // getWelcomeResponse(callback);  // Dispatch to your skill's launch.
+    getChoreList(callback);
 }
 
 /**
@@ -105,7 +101,7 @@ function onIntent(intentRequest, session, callback) {
     console.log("onIntent requestId=" + intentRequest.requestId + ", sessionId=" + session.sessionId);
 
     var intent = intentRequest.intent,intentName = intentRequest.intent.name;
-    console.log("got intent " + intentName);
+    console.log("got intent " + intentName + ", session:" + session);
     
     // Dispatch to your skill's intent handlers
     if ("HaveYouIntent" === intentName) {
@@ -117,11 +113,15 @@ function onIntent(intentRequest, session, callback) {
     } else if ("ScreenIntent" === intentName) {
         askChore(intent, session, callback);
     } else if ("AMAZON.HelpIntent" === intentName) {
-        getWelcomeResponse(callback);
+        getWelcomeResponse(session, callback);
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
         handleSessionEndRequest(callback);
     } else if ("ConfigurationIntent" == intentName) {
-        handleConfigurationRequest(callback);
+        handleConfigurationRequest(session, callback);
+    } else if ("ListChoresIntent" == intentName) {
+        handleListChoresRequest(session, callback);
+    } else if ("EndConfigurationIntent" == intentName) {
+        getChoreList(callback);
     } else {
         throw "Invalid intent";
     }
@@ -136,7 +136,28 @@ function onSessionEnded(sessionEndedRequest, session) {
     // Add cleanup logic here
 }
 
-function handleConfigurationRequest(callback) {
+function handleListChoresRequest(session, callback) {
+    console.log("at handleListChoresRequest " + session);
+    var sessionAttributes = {};
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
+    var cardTitle = "Welcome";
+    var speechOutput = "<p>The current set of chores is</p>";
+       for(var i=0; i < sessionAttributes.chorelist.length; i++) {
+        speechOutput += "<p>" + sessionAttributes.chorelist[i] + "</p>";
+    }
+    speechOutput += "<p>Say end to finish configuration or edit to change the list of chores</p>";
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+    console.log("built speech response:" + speechOutput2)
+    
+    var repromptText = "something about chores";
+    var shouldEndSession = false;
+
+    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+}
+
+function handleConfigurationRequest(session, callback) {
     console.log("at handleConfigurationRequest")
     var sessionAttributes = {};
     var cardTitle = "Welcome";
@@ -145,7 +166,9 @@ function handleConfigurationRequest(callback) {
 
     var repromptText = "Do you want to list chores or edit chores?";
     var shouldEndSession = false;
-
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
 }
 // --------------- Functions that control the skill's behavior -----------------------
@@ -158,7 +181,7 @@ function getWelcomeResponse(callback, chorelist) {
     console.log("assigned chorelist parameter to sessionAttributes");
     
     var cardTitle = "Welcome";
-    var speechOutput1 = "<p>Welcome to screen time.</p>  Have you " + chorelist[0]; 
+    var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say configure to edit chores</p> Have you " + chorelist[0]; 
     var speechOutput = "<speak>" + speechOutput1 + "</speak>";
     // speechOutput = speechOutput.replace('"', ' ')
     console.log("about to say:" + speechOutput + ".");
