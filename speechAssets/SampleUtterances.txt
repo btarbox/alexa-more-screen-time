@@ -14,8 +14,31 @@ IHaveNotIntent maybe
 IHaveNotIntent I dont know
 ConfigurationIntent Configuration
 ConfigurationIntent Config
+ConfigurationIntent Configuration
 ConfigurationIntent configure chores
 ListChoresIntent list
 ListChoresIntent list chores
 ListChoresIntent list the chores
 EndConfigurationIntent end
+EndConfigurationIntent end configuration
+AddChoresIntent Add chore {load the dishwasher|AddNew}
+AddChoresIntent Add chore {fold your clothes|AddNew}
+AddChoresIntent Add chore {walk the dog|AddNew}
+AddChoresIntent Add chore {gotten dreshed|AddNew}
+AddChoresIntent Add chore {taken out the garbage|AddNew}
+AddChoresIntent Add chore {fed the animals|AddNew}
+AddChoresIntent Add chore {done homework|AddNew}
+AddChoresIntent Add chore {eaten breakfast|AddNew}
+AddChoresIntent Add chore {fed the dog|AddNew}
+AddChoresIntent Add chore {fed the cat|AddNew}
+AddChoresIntent Add chore {picked up your room|AddNew}
+AddChoresIntent Add chore {brushed your teeth|AddNew}
+AddChoresIntent Add chore {taken a shower|AddNew}
+AddChoresIntent Add chore {made your bed|AddNew}
+AddChoresIntent Add chore {set the table|AddNew}
+AddChoresIntent Add chore {cleared the table|AddNew}
+AddChoresIntent Add chore {combed your hair|AddNew}
+FinishedAddingChoresIntent finished adding chores
+FinishedAddingChoresIntent done adding chores
+FinishedAddingChoresIntent completed adding chores
+

@@ -1,5 +1,5 @@
 /**
- * This sample demonstrates a simple skill built with the Amazon Alexa Skills Kit.
+ * This is a simple skill built with the Amazon Alexa Skills Kit.
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
  * testing instructions are located at https://github.com/btarbox/alexa-more-screen-time
  *
@@ -113,18 +113,31 @@ function onIntent(intentRequest, session, callback) {
     } else if ("ScreenIntent" === intentName) {
         askChore(intent, session, callback);
     } else if ("AMAZON.HelpIntent" === intentName) {
-        getWelcomeResponse(session, callback);
+        getWelcomeResponse(session, callback); // 2nd param is actually chorelist...FIX
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
         handleSessionEndRequest(callback);
     } else if ("ConfigurationIntent" == intentName) {
         handleConfigurationRequest(session, callback);
     } else if ("ListChoresIntent" == intentName) {
         handleListChoresRequest(session, callback);
+    } else if ("AddChoresIntent" == intentName) {
+        handleAddChoresRequest(session, callback, intentRequest);
+    } else if ("FinishedAddingChoresIntent" == intentName) {
+        handleFinishedAddingChoresRequest(session, callback);
     } else if ("EndConfigurationIntent" == intentName) {
         getChoreList(callback);
     } else {
         throw "Invalid intent";
     }
+}
+
+function handleFinishedAddingChoresRequest(session, callback) {
+    // get chorelist from session....
+    var chorelist = "oh snap, no chorelist";
+    if(session.attributes) {
+      chorelist = session.attributes.chorelist;
+    }
+    getWelcomeResponse(callback, chorelist)
 }
 
 /**
@@ -134,6 +147,35 @@ function onIntent(intentRequest, session, callback) {
 function onSessionEnded(sessionEndedRequest, session) {
     console.log("onSessionEnded requestId=" + sessionEndedRequest.requestId + ", sessionId=" + session.sessionId);
     // Add cleanup logic here
+}
+function handleAddChoresRequest(session, callback, intentRequest) {
+    var sessionAttributes = {};
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
+    
+    console.log("at handleAddChoresRequest " + intentRequest.intent + " " + intentRequest.intent.slots);
+    console.log("at handleAddChoresRequest2 " + intentRequest.intent.slots.AddNew);
+    console.log("at handleAddChoresRequest3 " + intentRequest.intent.slots.AddNew.value);
+
+    var cardTitle = "Welcome";
+    var speechOutput = "<p>You added the chore</p><p>" + intentRequest.intent.slots.AddNew.value + "</p>";
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+    var repromptText = "something about chores";
+    var shouldEndSession = false;
+
+    const bucket = "lambdaeventsource";
+    const key = "MoreScreenTime/NewChores.txt";
+
+    var s3obj = new aws.S3({params: {Bucket: bucket, Key: key}});
+    s3obj.upload({Body: intentRequest.intent.slots.AddNew.value}).
+      on('httpUploadProgress', function(evt) { console.log(evt); }).
+      send(function(err, data) { 
+          console.log(err, data) 
+          callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+      });
+    
+    // callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
 
 function handleListChoresRequest(session, callback) {
@@ -149,7 +191,7 @@ function handleListChoresRequest(session, callback) {
     }
     speechOutput += "<p>Say end to finish configuration or edit to change the list of chores</p>";
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
-    console.log("built speech response:" + speechOutput2)
+    console.log("built speech response:" + speechOutput2);
     
     var repromptText = "something about chores";
     var shouldEndSession = false;
@@ -158,7 +200,7 @@ function handleListChoresRequest(session, callback) {
 }
 
 function handleConfigurationRequest(session, callback) {
-    console.log("at handleConfigurationRequest")
+    console.log("at handleConfigurationRequest");
     var sessionAttributes = {};
     var cardTitle = "Welcome";
     var speechOutput1 = "<p>Do you want to list chores or edit chores?</p>"; 
@@ -181,7 +223,17 @@ function getWelcomeResponse(callback, chorelist) {
     console.log("assigned chorelist parameter to sessionAttributes");
     
     var cardTitle = "Welcome";
-    var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say configure to edit chores</p> Have you " + chorelist[0]; 
+    var date = new Date();
+    var current_hour = date.getHours();
+    var dayStr = ""
+    if(current_hour < 12) {
+        dayStr = " morning "
+    } else {
+        dayStr = " afternoon "
+    }
+    var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say configure to edit chores</p>"
+    speechOutput1 += "<p>Checking your " + dayStr + " chores</p>"
+    speechOutput1 += "Have you " + chorelist[0]; 
     var speechOutput = "<speak>" + speechOutput1 + "</speak>";
     // speechOutput = speechOutput.replace('"', ' ')
     console.log("about to say:" + speechOutput + ".");

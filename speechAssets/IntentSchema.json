@@ -49,6 +49,24 @@
       ]
     },
     {
+      "intent": "AddChoresIntent",
+      "slots": [
+        {
+          "name": "AddNew",
+          "type": "AMAZON.LITERAL"
+        }
+      ]
+    },
+    {
+      "intent": "FinishedAddingChoresIntent",
+      "slots": [
+        {
+          "name": "AddNew",
+          "type": "AMAZON.LITERAL"
+        }
+      ]
+    },
+    {
       "intent": "EndConfigurationIntent",
       "slots": [
         {
