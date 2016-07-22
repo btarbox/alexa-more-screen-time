@@ -11,6 +11,9 @@ var chores = ["done homework", "gotten dressed", "fed the animals"]; // short li
 var MAX_CHORE = chores.length;
 var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
+var date = new Date();
+var current_hour = date.getHours();
+var extraTime = 29
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
 // The JSON body of the request is provided in the event parameter.
@@ -49,8 +52,15 @@ exports.handler = function (event, context) {
 };
 
 function getChoreList(callback) {
+    console.log("about to get chores, hour of the day is " + current_hour)
     const bucket = "lambdaeventsource";
-    const key = "MoreScreenTime/DefaultChores.txt";
+    var key1 = "MoreScreenTime/";
+    if(current_hour < 12) {
+        key1 += "DefaultChores.txt"
+    } else {
+        key1 += "DefaultChoresAfternoon.txt"
+    }
+    const key = key1
     const params = {
         Bucket: bucket,
         Key: key
@@ -68,9 +78,14 @@ function getChoreList(callback) {
             // var arr = body.split(",").map(function (val) { return +val + 1; });
             // console.log("split chores into array (hopefully) " + chorelist);
             // console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
+            
+            console.log("about to parse first chore for extraTime " + chorelist[0])
+            var extraTime = parseInt(chorelist[0]); 
+            chorelist.shift()
+            console.log("finished parse, got " + extraTime)
             MAX_CHORE = chorelist.length;
             // console.log("about to call getWelcomeResponse with callback");
-            getWelcomeResponse(callback, chorelist);  // Dispatch to the skill's launch.
+            getWelcomeResponse(callback, chorelist, extraTime);  // Dispatch to the skill's launch.
         }
     });
     // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never
@@ -84,7 +99,7 @@ function getChoreList(callback) {
 function onSessionStarted(sessionStartedRequest, session) {
     console.log("onSessionStarted requestId=" + sessionStartedRequest.requestId + ", sessionId=" + session.sessionId);
 }
-
+  
 /**
  * Called when the user launches the skill without specifying what they want.
  */
@@ -113,7 +128,7 @@ function onIntent(intentRequest, session, callback) {
     } else if ("ScreenIntent" === intentName) {
         askChore(intent, session, callback);
     } else if ("AMAZON.HelpIntent" === intentName) {
-        getWelcomeResponse(session, callback); // 2nd param is actually chorelist...FIX
+        getWelcomeResponse(session, callback, 31); // 2nd param is actually chorelist...FIX
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
         handleSessionEndRequest(callback);
     } else if ("ConfigurationIntent" == intentName) {
@@ -136,8 +151,9 @@ function handleFinishedAddingChoresRequest(session, callback) {
     var chorelist = "oh snap, no chorelist";
     if(session.attributes) {
       chorelist = session.attributes.chorelist;
+      extraTime = session.attributes.extaTime
     }
-    getWelcomeResponse(callback, chorelist)
+    getWelcomeResponse(callback, chorelist, extraTime)
 }
 
 /**
@@ -215,16 +231,16 @@ function handleConfigurationRequest(session, callback) {
 }
 // --------------- Functions that control the skill's behavior -----------------------
 
-function getWelcomeResponse(callback, chorelist) {
+function getWelcomeResponse(callback, chorelist, extraTime) {
     // If we wanted to initialize the session to have some attributes we could add those here.
     console.log("at getWelcomeResponse with " + chorelist.length + " chores.");
     var sessionAttributes = {};
     sessionAttributes.chorelist = chorelist;
-    console.log("assigned chorelist parameter to sessionAttributes");
+    sessionAttributes.extraTime = extraTime;
+    console.log("assigned chorelist parameter to sessionAttributes, and extraTime " + sessionAttributes.extraTime);
     
     var cardTitle = "Welcome";
-    var date = new Date();
-    var current_hour = date.getHours();
+
     var dayStr = ""
     if(current_hour < 12) {
         dayStr = " morning "
@@ -306,7 +322,7 @@ function askChore(intent, session, callback) {
     } else {
         console.log("chore counter is " + sessionAttributes.choreCounter);
     }
-    console.log("here");
+    console.log("here, extraTime = " + sessionAttributes.extraTime);
     var shouldEndSession = false;
     if(!intent.slots.Chore) {
        console.log("no chore yet, must be first time");
@@ -324,7 +340,7 @@ function askChore(intent, session, callback) {
        speechOutput = "have you " + sessionAttributes.chorelist[sessionAttributes.choreCounter];
        sessionAttributes.choreCounter += 1;
     } else {
-        speechOutput = "<p>Yes,</p> you may have more screen time";
+        speechOutput = "<p>Yes,</p> you may have " + sessionAttributes.extraTime + " more minutes of screen time";
         shouldEndSession = true
     }
     repromptText = "bla";
