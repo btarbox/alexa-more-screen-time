@@ -40,6 +40,15 @@
       ]
     },
     {
+      "intent": "EditChoresIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },    
+    {
       "intent": "ListChoresIntent",
       "slots": [
         {

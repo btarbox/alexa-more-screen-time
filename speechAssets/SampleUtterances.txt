@@ -21,6 +21,9 @@ ListChoresIntent list chores
 ListChoresIntent list the chores
 EndConfigurationIntent end
 EndConfigurationIntent end configuration
+EditChoresIntent Edit
+EditChoresIntent Edit the chores
+EditChoresIntent Edit my chores
 AddChoresIntent Add chore {load the dishwasher|AddNew}
 AddChoresIntent Add chore {fold your clothes|AddNew}
 AddChoresIntent Add chore {walk the dog|AddNew}

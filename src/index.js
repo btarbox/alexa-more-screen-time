@@ -12,10 +12,12 @@ var MAX_CHORE = chores.length;
 var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 var date = new Date();
-var current_hour = date.getHours() - 4;
+var current_hour = date.getHours() - 4;  // seems to be on zulu time, will need to adjust this for Alexa local time, not just EST
 var current_day = date.getDay();
-
-var extraTime = 29
+// var masterChorelist = "";
+// var masterChoreListIndex = 0;
+var MAX_MASTER_CHORE = 0;
+var extraTime = 29;
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
 // The JSON body of the request is provided in the event parameter.
@@ -54,17 +56,17 @@ exports.handler = function (event, context) {
 };
 
 function getChoreList(callback) {
-    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day)
+    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day);
     const bucket = "lambdaeventsource";
     var key1 = "MoreScreenTime/";
     if(current_day < 1 || current_day > 5) {
-        key1 += "DefaultWeekendChores.txt"
+        key1 += "DefaultWeekendChores.txt";
     } else if(current_hour < 12) {
-        key1 += "DefaultChores.txt"
+        key1 += "DefaultChores.txt";
     } else {
-        key1 += "DefaultChoresAfternoon.txt"
+        key1 += "DefaultChoresAfternoon.txt";
     }
-    const key = key1
+    const key = key1;
     const params = {
         Bucket: bucket,
         Key: key
@@ -83,10 +85,10 @@ function getChoreList(callback) {
             // console.log("split chores into array (hopefully) " + chorelist);
             // console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
             
-            console.log("about to parse first chore for extraTime " + chorelist[0] + " dayOfWeek " + current_day)
+            console.log("about to parse first chore for extraTime " + chorelist[0] + " dayOfWeek " + current_day);
             var extraTime = parseInt(chorelist[0]); 
-            chorelist.shift()
-            console.log("finished parse, got " + extraTime)
+            chorelist.shift();
+            console.log("finished parse, got " + extraTime);
             MAX_CHORE = chorelist.length;
             // console.log("about to call getWelcomeResponse with callback");
             getWelcomeResponse(callback, chorelist, extraTime);  // Dispatch to the skill's launch.
@@ -95,6 +97,31 @@ function getChoreList(callback) {
     // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never
     // has a chance to finish
     console.log("past the s3 stuff");
+}
+
+function getMasterChoreList(session, callback, intent) {
+    console.log("at getMasterChoreList");
+    const bucket = "lambdaeventsource";
+    var key1 = "MoreScreenTime/MasterChoreList.txt";
+    const key = key1;
+    const params = {
+        Bucket: bucket,
+        Key: key
+    };
+    s3.getObject(params, function(err, data) {
+        if (err) {
+            console.log("not found " + err);
+        } else {
+            var body = data.Body.toString('ascii');
+            var masterchorelist = body.split(",");
+            // masterchorelist.shift();
+            MAX_MASTER_CHORE = masterchorelist.length;
+            console.log("got and parsed MasterChorelist, about to call handleEditChoresRequest " + masterchorelist + " " + MAX_MASTER_CHORE);
+            handleEditChoresRequest(session, callback, masterchorelist);  
+        }
+    });
+    // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never has a chance to finish
+    console.log("past the masterchorelist s3 stuff");
 }
 
 /**
@@ -109,7 +136,6 @@ function onSessionStarted(sessionStartedRequest, session) {
  */
 function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
-
     getChoreList(callback);
 }
 
@@ -141,6 +167,10 @@ function onIntent(intentRequest, session, callback) {
         handleListChoresRequest(session, callback);
     } else if ("AddChoresIntent" == intentName) {
         handleAddChoresRequest(session, callback, intentRequest);
+    } else if ("AddThatChoreIntent" == intentName) {
+        handleAddThatChoreRequest(session, callback, intentRequest);
+    } else if ("EditChoresIntent" == intentName) {
+        getMasterChoreList(session, callback, intentRequest);
     } else if ("FinishedAddingChoresIntent" == intentName) {
         handleFinishedAddingChoresRequest(session, callback);
     } else if ("EndConfigurationIntent" == intentName) {
@@ -155,9 +185,9 @@ function handleFinishedAddingChoresRequest(session, callback) {
     var chorelist = "oh snap, no chorelist";
     if(session.attributes) {
       chorelist = session.attributes.chorelist;
-      extraTime = session.attributes.extaTime
+      extraTime = session.attributes.extaTime;
     }
-    getWelcomeResponse(callback, chorelist, extraTime)
+    getWelcomeResponse(callback, chorelist, extraTime);
 }
 
 /**
@@ -213,7 +243,53 @@ function handleListChoresRequest(session, callback) {
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     console.log("built speech response:" + speechOutput2);
     
-    var repromptText = "something about chores";
+    var repromptText = "<p>Say end to finish configuration or edit to change the list of chores</p>";
+    var shouldEndSession = false;
+
+    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+}
+
+function handleEditChoresRequest(session, callback, masterchorelist) {
+    console.log("at handleEditChoresRequest " + session + " masterchorelist " + masterchorelist);
+    var sessionAttributes = {};
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
+    sessionAttributes.masterchorelist = masterchorelist;
+    sessionAttributes.masterchorelistIndex = 1;
+    sessionAttributes.MAX_MASTER_CHORE = MAX_MASTER_CHORE;
+    
+    var cardTitle = "Welcome";
+    var speechOutput = "<p>We will now build the list of chores you want.</p>"
+    speechOutput += "<p>We will list the possible chores</p><p>after each one please say</p><p>add that chore</p><p>or</p><p>skip that chore</p>";
+    speechOutput += "<p>add chore" + masterchorelist[0] + "</p>"
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+    console.log("built speech response:" + speechOutput2);
+    
+    var repromptText = "<p>unexpected situation while editing chores</p>";
+    var shouldEndSession = false;
+
+    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+}
+
+function handleAddThatChoreRequest(session, callback) {
+    var sessionAttributes = {};
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
+    console.log("at handleAddThatChoreRequest " + session + "masterchorelistIndex is " + sessionAttributes.masterchorelistIndex + " of " + sessionAttributes.masterchorelist.length);
+    var cardTitle = "Welcome";
+    var speechOutput = "<p>add chore" + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex] + "</p>"
+    sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
+    console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
+    
+    if(sessionAttributes.masterchorelistIndex > sessionAttributes.masterchorelist.length) {
+        speechOutput = "You have finished configuring chores from the master list"
+    }
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+    console.log("built speech response:" + speechOutput2);
+    
+    var repromptText = "<p>unexpected situation while editing chores</p>";
     var shouldEndSession = false;
 
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
