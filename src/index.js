@@ -1,8 +1,8 @@
 /**
- * This is a simple skill built with the Amazon Alexa Skills Kit.
+ * This is a skill built with the Amazon Alexa Skills Kit.
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
  * testing instructions are located at https://github.com/btarbox/alexa-more-screen-time
- *
+ * 
  * Wabi Sabi Software, all rights reserved, 2016
  */
 
@@ -12,7 +12,9 @@ var MAX_CHORE = chores.length;
 var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 var date = new Date();
-var current_hour = date.getHours();
+var current_hour = date.getHours() - 4;
+var current_day = date.getDay();
+
 var extraTime = 29
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
@@ -52,10 +54,12 @@ exports.handler = function (event, context) {
 };
 
 function getChoreList(callback) {
-    console.log("about to get chores, hour of the day is " + current_hour)
+    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day)
     const bucket = "lambdaeventsource";
     var key1 = "MoreScreenTime/";
-    if(current_hour < 12) {
+    if(current_day < 1 || current_day > 5) {
+        key1 += "DefaultWeekendChores.txt"
+    } else if(current_hour < 12) {
         key1 += "DefaultChores.txt"
     } else {
         key1 += "DefaultChoresAfternoon.txt"
@@ -79,7 +83,7 @@ function getChoreList(callback) {
             // console.log("split chores into array (hopefully) " + chorelist);
             // console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
             
-            console.log("about to parse first chore for extraTime " + chorelist[0])
+            console.log("about to parse first chore for extraTime " + chorelist[0] + " dayOfWeek " + current_day)
             var extraTime = parseInt(chorelist[0]); 
             chorelist.shift()
             console.log("finished parse, got " + extraTime)
@@ -237,16 +241,18 @@ function getWelcomeResponse(callback, chorelist, extraTime) {
     var sessionAttributes = {};
     sessionAttributes.chorelist = chorelist;
     sessionAttributes.extraTime = extraTime;
-    console.log("assigned chorelist parameter to sessionAttributes, and extraTime " + sessionAttributes.extraTime);
+    console.log("assigned chorelist parameter to sessionAttributes, and extraTime " + sessionAttributes.extraTime + " current_day " + current_day);
     
     var cardTitle = "Welcome";
-
     var dayStr = ""
-    if(current_hour < 12) {
+    if(current_day < 1 || current_day > 5) {
+        dayStr = " weekend "
+    } else if(current_hour < 12) {
         dayStr = " morning "
     } else {
         dayStr = " afternoon "
     }
+
     var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say configure to edit chores</p>"
     speechOutput1 += "<p>Checking your " + dayStr + " chores</p>"
     speechOutput1 += "Have you " + chorelist[0]; 
@@ -291,6 +297,7 @@ function screenTimeDenied(intent, session, callback) {
     for(i=sessionAttributes.choreCounter; i < MAX_CHORE; i++) {
         speechOutput += sessionAttributes.chorelist[i] + " ";
     }
+    speechOutput += "<p>And remember</p><p> all us electronic devices talk to each other</p><p> so we will know if you cheat.</p>"
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     var shouldEndSession = true;
     callback(sessionAttributes,
