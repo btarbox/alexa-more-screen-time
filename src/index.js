@@ -169,6 +169,8 @@ function onIntent(intentRequest, session, callback) {
         handleAddChoresRequest(session, callback, intentRequest);
     } else if ("AddThatChoreIntent" == intentName) {
         handleAddThatChoreRequest(session, callback, intentRequest);
+    } else if ("SkipThatChoreIntent" == intentName) {
+        handleSkipThatChoreRequest(session, callback, intentRequest);
     } else if ("EditChoresIntent" == intentName) {
         getMasterChoreList(session, callback, intentRequest);
     } else if ("FinishedAddingChoresIntent" == intentName) {
@@ -256,7 +258,7 @@ function handleEditChoresRequest(session, callback, masterchorelist) {
       sessionAttributes = session.attributes;
     }
     sessionAttributes.masterchorelist = masterchorelist;
-    sessionAttributes.masterchorelistIndex = 1;
+    sessionAttributes.masterchorelistIndex = 0;  
     sessionAttributes.MAX_MASTER_CHORE = MAX_MASTER_CHORE;
     
     var cardTitle = "Welcome";
@@ -272,18 +274,32 @@ function handleEditChoresRequest(session, callback, masterchorelist) {
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
 
+/**
+ * User said "add to chore" in response to listing the chores
+ */
 function handleAddThatChoreRequest(session, callback) {
     var sessionAttributes = {};
     if(session.attributes) {
       sessionAttributes = session.attributes;
     }
     console.log("at handleAddThatChoreRequest " + session + "masterchorelistIndex is " + sessionAttributes.masterchorelistIndex + " of " + sessionAttributes.masterchorelist.length);
+
+    if (typeof sessionAttributes.newchorelist == "undefined")  {
+        console.log("no newchorelist yet so initialize to chore: " + sessionAttributes.masterchorelistIndex)
+        sessionAttributes.newchorelist = sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
+    } else {
+        console.log("found newchorelist, adding chore: " + sessionAttributes.masterchorelistIndex)
+        sessionAttributes.newchorelist = sessionAttributes.newchorelist + "," + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
+    }
+    console.log("newchorelist now:" + sessionAttributes.newchorelist)
+    
+
+    sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
     var cardTitle = "Welcome";
     var speechOutput = "<p>add chore" + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex] + "</p>"
-    sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
     console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
     
-    if(sessionAttributes.masterchorelistIndex > sessionAttributes.masterchorelist.length) {
+    if(sessionAttributes.masterchorelistIndex >= sessionAttributes.masterchorelist.length) {
         speechOutput = "You have finished configuring chores from the master list"
     }
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
@@ -294,6 +310,32 @@ function handleAddThatChoreRequest(session, callback) {
 
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
+/**
+ * User said "add to chore" in response to listing the chores
+ */
+function handleSkipThatChoreRequest(session, callback) {
+    var sessionAttributes = {};
+    if(session.attributes) {
+      sessionAttributes = session.attributes;
+    }
+    console.log("at handleSkipThatChoreRequest " + session + "masterchorelistIndex is " + sessionAttributes.masterchorelistIndex + " of " + sessionAttributes.masterchorelist.length);
+    sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
+    var cardTitle = "Welcome";
+    var speechOutput = "<p>add chore" + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex] + "</p>"
+    console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
+    
+    if(sessionAttributes.masterchorelistIndex >= sessionAttributes.masterchorelist.length) {
+        speechOutput = "You have finished configuring chores from the master list"
+    }
+    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+    console.log("built speech response:" + speechOutput2);
+    
+    var repromptText = "<p>unexpected situation while editing chores</p>";
+    var shouldEndSession = false;
+
+    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+}
+
 
 function handleConfigurationRequest(session, callback) {
     console.log("at handleConfigurationRequest");
