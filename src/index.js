@@ -3,7 +3,7 @@
  * The Intent Schema, Custom Slots, and Sample Utterances for this skill, as well as
  * testing instructions are located at https://github.com/btarbox/alexa-more-screen-time
  * 
- * Wabi Sabi Software, all rights reserved, 2016
+ * Wabi Sabi Software, all rights reserved, 2016, 2017
  */
 
 var chores = ["done homework", "gotten dressed", "fed the animals"]; // short list for testing
@@ -55,48 +55,77 @@ exports.handler = function (event, context) {
     }
 };
 
-function getChoreList(callback) {
-    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day);
-    const bucket = "lambdaeventsource";
-    var key1 = "MoreScreenTime/";
+function getTimeOfDay() {
+    var tod = ""
     if(current_day < 1 || current_day > 5) {
-        key1 += "DefaultWeekendChores.txt";
+        tod += "WeekendChores.txt";
     } else if(current_hour < 12) {
-        key1 += "DefaultChores.txt";
+        tod += "MorningChores.txt";
     } else {
-        key1 += "DefaultChoresAfternoon.txt";
+        tod += "AfternoonChores.txt";
     }
-    const key = key1;
-    const params = {
+    return tod
+}
+
+function getChoreList(callback, session) {
+    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day);
+    console.log("user id " + session.user.userId);
+    var todChores = getTimeOfDay();
+    console.log("got time of day file: " + todChores);
+    var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex');
+    console.log("user id hashed " + hashed); 
+    const bucket = "lambdaeventsource";
+    var keyBase = "MoreScreenTime/";
+//    var keyFile = ""
+//    if(current_day < 1 || current_day > 5) {
+//        keyFile += "DefaultWeekendChores.txt";
+//    } else if(current_hour < 12) {
+//        keyFile += "DefaultChores.txt";
+//    } else {
+//        keyFile += "DefaultChoresAfternoon.txt";
+//    }
+    // const key = keyBase + keyFile;
+    const key = keyBase + "Default" + todChores
+    const keyExistingUser = keyBase + hashed + "/" + todChores
+    console.log("key is " + key + ", keyExistingUser is " + keyExistingUser)
+    
+    const s3ExistingUserParams = {
+        Bucket: bucket,
+        Key: keyExistingUser
+    };
+    const s3NewUserParams = {
         Bucket: bucket,
         Key: key
     };
-    // console.log("about to get s3 object with chore list");
-    s3.getObject(params, function(err, data) {
+    // console.log("about to get s3 object with chore list for existing user, if not found then look for default chores");
+    s3.getObject(s3ExistingUserParams, function(err, data) {
         if (err) {
-            console.log("not found " + err);
+            console.log("chores not found for existing user " + err + ", try for default user");
+            s3.getObject(s3NewUserParams, function(err, data) {
+                if (err) {
+                    console.log("chores not found for new user");
+                } else {
+                    console.log("got chores for default user");
+                    getChoresFromFile(callback, data);
+                }
+            });
         } else {
-            // console.log('found file ', data.ContentType);
-            var body = data.Body.toString('ascii');
-            // console.log("file contents: " + body);
-            // var str = "123, 124, 234,252";
-            var chorelist = body.split(",");
-            // var arr = body.split(",").map(function (val) { return +val + 1; });
-            // console.log("split chores into array (hopefully) " + chorelist);
-            // console.log("There are " + chorelist.length + " chores: " + chorelist[0] + ";" + chorelist[1] + ";");
-            
-            console.log("about to parse first chore for extraTime " + chorelist[0] + " dayOfWeek " + current_day);
-            var extraTime = parseInt(chorelist[0]); 
-            chorelist.shift();
-            console.log("finished parse, got " + extraTime);
-            MAX_CHORE = chorelist.length;
-            // console.log("about to call getWelcomeResponse with callback");
-            getWelcomeResponse(callback, chorelist, extraTime);  // Dispatch to the skill's launch.
+            getChoresFromFile(callback, data);
         }
     });
-    // NOTE: all the following needs to be inside the s3.getObject callback or else that callback never
-    // has a chance to finish
     console.log("past the s3 stuff");
+}
+
+function getChoresFromFile(callback, data) {
+    var body = data.Body.toString('ascii');
+    var chorelist = body.split(",");
+
+    console.log("about to parse first chore in getChoresFromFile " + chorelist[0] + " dayOfWeek " + current_day);
+    var extraTime = parseInt(chorelist[0]); 
+    chorelist.shift();
+    console.log("finished parse, got " + extraTime);
+    MAX_CHORE = chorelist.length;
+    getWelcomeResponse(callback, chorelist, extraTime);  // Dispatch to the skill's launch.
 }
 
 function getMasterChoreList(session, callback, intent) {
@@ -136,7 +165,7 @@ function onSessionStarted(sessionStartedRequest, session) {
  */
 function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
-    getChoreList(callback);
+    getChoreList(callback, session);
 }
 
 /**
@@ -176,7 +205,7 @@ function onIntent(intentRequest, session, callback) {
     } else if ("FinishedAddingChoresIntent" == intentName) {
         handleFinishedAddingChoresRequest(session, callback);
     } else if ("EndConfigurationIntent" == intentName) {
-        getChoreList(callback);
+        getChoreList(callback, session);
     } else {
         throw "Invalid intent";
     }
@@ -200,6 +229,7 @@ function onSessionEnded(sessionEndedRequest, session) {
     console.log("onSessionEnded requestId=" + sessionEndedRequest.requestId + ", sessionId=" + session.sessionId);
     // Add cleanup logic here
 }
+
 function handleAddChoresRequest(session, callback, intentRequest) {
     var sessionAttributes = {};
     if(session.attributes) {
@@ -215,9 +245,10 @@ function handleAddChoresRequest(session, callback, intentRequest) {
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     var repromptText = "something about chores";
     var shouldEndSession = false;
+    var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex')
 
     const bucket = "lambdaeventsource";
-    const key = "MoreScreenTime/NewChores.txt";
+    const key = "MoreScreenTime/" + hashed + "/NewChores.txt";
 
     var s3obj = new aws.S3({params: {Bucket: bucket, Key: key}});
     s3obj.upload({Body: intentRequest.intent.slots.AddNew.value}).
@@ -226,8 +257,6 @@ function handleAddChoresRequest(session, callback, intentRequest) {
           console.log(err, data) 
           callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
       });
-    
-    // callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
 
 function handleListChoresRequest(session, callback) {
@@ -275,7 +304,7 @@ function handleEditChoresRequest(session, callback, masterchorelist) {
 }
 
 /**
- * User said "add to chore" in response to listing the chores
+ * User said "add that chore" in response to listing the chores
  */
 function handleAddThatChoreRequest(session, callback) {
     var sessionAttributes = {};
@@ -286,7 +315,8 @@ function handleAddThatChoreRequest(session, callback) {
 
     if (typeof sessionAttributes.newchorelist == "undefined")  {
         console.log("no newchorelist yet so initialize to chore: " + sessionAttributes.masterchorelistIndex)
-        sessionAttributes.newchorelist = sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
+        // first element of the list is the amount of extra time they can get
+        sessionAttributes.newchorelist = "30, " + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
     } else {
         console.log("found newchorelist, adding chore: " + sessionAttributes.masterchorelistIndex)
         sessionAttributes.newchorelist = sessionAttributes.newchorelist + "," + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
@@ -297,18 +327,43 @@ function handleAddThatChoreRequest(session, callback) {
     sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
     var cardTitle = "Welcome";
     var speechOutput = "<p>add chore" + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex] + "</p>"
-    console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
-    
-    if(sessionAttributes.masterchorelistIndex >= sessionAttributes.masterchorelist.length) {
-        speechOutput = "You have finished configuring chores from the master list"
-    }
-    var speechOutput2 = "<speak>" + speechOutput + "</speak>";
-    console.log("built speech response:" + speechOutput2);
-    
     var repromptText = "<p>unexpected situation while editing chores</p>";
     var shouldEndSession = false;
 
-    callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+    console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
+    
+    if(sessionAttributes.masterchorelistIndex >= sessionAttributes.masterchorelist.length) {
+        console.log("finished configuring chores from the master list, about to write to S3")
+        speechOutput = "You have finished configuring chores from the master list, about to write to S3"
+        const bucket = "lambdaeventsource";
+        var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex')
+
+        // const key = "MoreScreenTime/NewlyConfiguredChores.txt";
+        const key = "MoreScreenTime/" + hashed + "/" + getTimeOfDay()
+        console.log("about to write new file " + key)
+
+        var s3obj = new aws.S3({params: {Bucket: bucket, Key: key}});
+/*        s3obj.upload({Body: sessionAttributes.newchorelist}).
+        on('httpUploadProgress', function(evt) { console.log(evt); }).
+            send(function(err, data) { 
+            console.log(err, data) 
+            callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+        });
+*/
+        var speechOutput2 = "<speak>" + "finished configuring chores, goodbye" + "</speak>";
+        
+        s3obj.upload({Body: sessionAttributes.newchorelist}, function(err, data) {
+           console.log(err, data); 
+           console.log("finished writing new chores....")
+           callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+        });
+        // console.log("after the write to s3 code block");
+        // callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+    }else {
+        var speechOutput2 = "<speak>" + speechOutput + "</speak>";
+        console.log("about to ask about next possible chore:" + speechOutput2);
+        callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
+    }
 }
 /**
  * User said "add to chore" in response to listing the chores
