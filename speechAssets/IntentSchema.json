@@ -4,6 +4,24 @@
       "intent": "ScreenIntent"
     },
     {
+      "intent": "SetTimeIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },        
+    {
+      "intent": "GetTimeIntent",
+      "slots": [
+        {
+          "name": "LocalTime",
+          "type": "AMAZON.TIME"
+        }
+      ]
+    },
+    {
       "intent": "HaveYouIntent",
       "slots": [
         {
@@ -67,6 +85,24 @@
       ]
     },
     {
+      "intent": "AddThatChoreIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },
+    {
+      "intent": "SkipThatChoreIntent",
+      "slots": [
+        {
+          "name": "Chore",
+          "type": "LIST_OF_CHORES"
+        }
+      ]
+    },    
+    {
       "intent": "FinishedAddingChoresIntent",
       "slots": [
         {
@@ -89,3 +125,4 @@
     }
   ]
 }
+

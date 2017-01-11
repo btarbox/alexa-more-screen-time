@@ -1,5 +1,10 @@
 ScreenIntent I want more screen time
 ScreenIntent give me screen time
+SetTimeIntent Set the time
+SetTimeIntent Set time
+SetTimeIntent Set my time
+GetTimeIntent The time is {LocalTime}
+GetTimeIntent My time is {LocalTime}
 HaveYouIntent have you {Chore}
 IHaveIntent I have {Chore}
 IHaveIntent yes
@@ -23,7 +28,12 @@ EndConfigurationIntent end
 EndConfigurationIntent end configuration
 EditChoresIntent Edit
 EditChoresIntent Edit the chores
+EditChoresIntent Edit chores
 EditChoresIntent Edit my chores
+AddThatChoreIntent Add that chore
+AddThatChoreIntent Please add that chore
+SkipThatChoreIntent Skip that chore
+SkipThatChoreIntent Please skip that chore
 AddChoresIntent Add chore {load the dishwasher|AddNew}
 AddChoresIntent Add chore {fold your clothes|AddNew}
 AddChoresIntent Add chore {walk the dog|AddNew}
