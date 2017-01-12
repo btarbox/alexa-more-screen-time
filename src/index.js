@@ -77,7 +77,8 @@ function getChoreList(callback, session) {
     console.log("user id hashed " + hashed); 
     const bucket = "lambdaeventsource";
     var keyBase = "MoreScreenTime/";
-    const key = keyBase + "Default" + todChores
+    var keyDefaultUser = "Default"
+    const key = keyBase + keyDefaultUser + todChores
     const keyExistingUser = keyBase + hashed + "/" + todChores
     console.log("key is " + key + ", keyExistingUser is " + keyExistingUser)
     
@@ -98,20 +99,23 @@ function getChoreList(callback, session) {
                     console.log("chores not found for new user");
                 } else {
                     console.log("got chores for default user");
-                    getChoresFromFile(callback, data);
+                    getChoresFromFile(callback, data, keyDefaultUser);
                 }
             });
         } else {
-            getChoresFromFile(callback, data);
+            getChoresFromFile(callback, data, keyExistingUser);
         }
     });
     console.log("past the s3 stuff");
 }
 
-function getChoresFromFile(callback, data) {
+// called twice from getChoreList, once for specific user and once for default
+// TODO: add timezone offset to both default and specific user chore lists
+function getChoresFromFile(callback, data, whichUser) {
     var body = data.Body.toString('ascii');
     var chorelist = body.split(",");
-
+    console.log("about to getChoresFromFile for user " + whichUser + ", first get tz for user");
+    
     console.log("about to parse first chore in getChoresFromFile " + chorelist[0] + " dayOfWeek " + current_day);
     var extraTime = parseInt(chorelist[0]); 
     chorelist.shift();
@@ -210,13 +214,11 @@ function handleHelpRequest(session, callback) {
     
     var cardTitle = "Welcome";
     var repromptText = "something about chores after help";
-    var speechOutput = "<p>Say</p><p> Alexa ask more screen time</p> <p>or Alexa open more screentime</p>" + 
-      "<p>You will be asked about the chores for the morning or the afternoon or the weekend</p>" +
-      "<p>You start with a default set of chores for each</p>" +     
+    var speechOutput = "<p>You start with a default set of chores for morning afternoon and the weekend</p>" +     
       "<p>Answer yes or no about each chore</p>" +
-      "<p>Say configure to edit the list of chores.</p>" +
-      "<p>You will be asked if you want to add each possible chores</p>" +
-      "<p>You can also say</p><p> set the time</p><p> to tell us your local time so we can know when it is morning or afternoon for you</p>";
+      "<p>If you want to select your own set of chores say configure</p>" +
+      "<p>Amazon does not tell us your time zone so we have guess if its morning or afternoon</p>" +
+      "<p>You can say</p><p> set the time</p><p> to tell us your local time.</p>";
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
 }
@@ -459,7 +461,7 @@ function getWelcomeResponse(callback, chorelist, extraTime) {
         dayStr = " afternoon "
     }
 
-    var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say configure to edit chores</p>"
+    var speechOutput1 = "<p>Welcome to screen time.</p> <p>Say help to get directions</p>"
     speechOutput1 += "<p>Checking your " + dayStr + " chores</p>"
     speechOutput1 += "Have you " + chorelist[0]; 
     var speechOutput = "<speak>" + speechOutput1 + "</speak>";
@@ -594,4 +596,3 @@ function buildResponse(sessionAttributes, speechletResponse) {
         response: speechletResponse
     };
 }
-
