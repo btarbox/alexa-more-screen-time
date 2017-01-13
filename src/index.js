@@ -12,11 +12,12 @@ var MAX_CHORE = chores.length;
 var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 var date = new Date();
-var tzoffset = new Date().getTimezoneOffset() / 60
-var current_hour = date.getHours() + tzoffset;  // seems to be on zulu time, will need to adjust this for Alexa local time, not just EST
+// var tzoffset = new Date().getTimezoneOffset() / 60
+var current_hour = date.getHours();  // seems to be on zulu time, will need to adjust this for Alexa local time, not just EST
 var current_day = date.getDay();
 var MAX_MASTER_CHORE = 0;
-var extraTime = 29;
+var extraTime = 30;
+var tzOffset = 6;  // default to US Central Time
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
 // The JSON body of the request is provided in the event parameter.
@@ -56,6 +57,12 @@ exports.handler = function (event, context) {
 
 function getTimeOfDay() {
     var tod = ""
+    var hour = current_hour - tzOffset;
+    if(hour < 0) {
+        console.log("hour is " + hour + " which becomes " + (hour + 24))
+        hour = hour + 24
+    }
+    current_hour = hour
     if(current_day < 1 || current_day > 5) {
         tod += "WeekendChores.txt";
     } else if(current_hour < 12) {
@@ -66,9 +73,42 @@ function getTimeOfDay() {
     return tod
 }
 
+// find the timezone file and then use that to call getChoreListInner to find the actual file
 function getChoreList(callback, session) {
-    var tzoffset2 = new Date().getTimezoneOffset()
-    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day + " tzoffset:" + tzoffset2);
+    console.log("at getChoreListOuter which finds the tz file if available and then calls getChoreListInner")
+    var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex');
+    const bucket = "lambdaeventsource";
+    var keyBase = "MoreScreenTime/";
+    var tzFileName = "tzOffset"
+    var existingUserKey = keyBase + hashed + "/" + tzFileName
+    
+    const s3ExistingUserParams = {
+        Bucket: bucket,
+        Key: existingUserKey
+    };
+//    const s3NewUserParams = {
+//        Bucket: bucket,
+//        Key: keyBase + "Default/" + tzFileName
+//    };
+    
+    s3.getObject(s3ExistingUserParams, function(err, data) {
+        if (err) {
+            console.log("did not find tz file for existing user " + existingUserKey)
+            // use default tzOffset, just call getChoreListInner
+            getChoreListInner(callback, session)
+        } else {
+            console.log("found tz file for existing user " + existingUserKey);
+            console.log("data is " + data);
+            getTZFromFile(data); // sets global tzOffset
+            console.log("found tz file for existing user, tzOffset now " + tzOffset)
+            getChoreListInner(callback, session)
+        }
+    });
+}
+
+function getChoreListInner(callback, session) {
+    // var tzoffset2 = new Date().getTimezoneOffset()
+    console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day + " tzOffset:" + tzOffset);
     console.log(" " + new Date())
     console.log("user id " + session.user.userId);
     var todChores = getTimeOfDay();
@@ -107,6 +147,12 @@ function getChoreList(callback, session) {
         }
     });
     console.log("past the s3 stuff");
+}
+
+function getTZFromFile(data) {
+    var body = data.Body.toString('ascii');
+    var dataList = body.split(",");
+    tzOffset = parseInt(dataList[0])
 }
 
 // called twice from getChoreList, once for specific user and once for default
