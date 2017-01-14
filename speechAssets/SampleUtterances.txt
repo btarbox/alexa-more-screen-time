@@ -1,5 +1,6 @@
 ScreenIntent I want more screen time
 ScreenIntent give me screen time
+EndConfigurationIntent continue
 SetTimeIntent Set the time
 SetTimeIntent Set time
 SetTimeIntent Set my time

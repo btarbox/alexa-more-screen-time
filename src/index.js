@@ -13,11 +13,11 @@ var aws = require('aws-sdk');
 var s3 = new aws.S3({ apiVersion: '2006-03-01' });
 var date = new Date();
 // var tzoffset = new Date().getTimezoneOffset() / 60
-var current_hour = date.getHours();  // seems to be on zulu time, will need to adjust this for Alexa local time, not just EST
+var current_hour = date.getHours();  // zulu time, will need to adjust this for Alexa local time
 var current_day = date.getDay();
 var MAX_MASTER_CHORE = 0;
 var extraTime = 30;
-var tzOffset = 6;  // default to US Central Time
+var tzOffset = 6;  // default to US Central Time unless customer tells us otherwise
 
 // Route the incoming request based on type (LaunchRequest, IntentRequest, etc.) 
 // The JSON body of the request is provided in the event parameter.
@@ -55,72 +55,129 @@ exports.handler = function (event, context) {
     }
 };
 
-function getTimeOfDay() {
-    var tod = ""
-    var hour = current_hour - tzOffset;
-    if(hour < 0) {
-        console.log("hour is " + hour + " which becomes " + (hour + 24))
-        hour = hour + 24
-    }
-    current_hour = hour
-    if(current_day < 1 || current_day > 5) {
-        tod += "WeekendChores.txt";
-    } else if(current_hour < 12) {
-        tod += "MorningChores.txt";
+/**
+ * Called when the user specifies an intent for this skill.
+ */
+function onIntent(intentRequest, session, callback) {
+    console.log("onIntent requestId=" + intentRequest.requestId + ", sessionId=" + session.sessionId);
+    console.log("intentRequest is:" + intentRequest)
+    
+    var intent = intentRequest.intent,intentName = intentRequest.intent.name;
+    console.log("got intent " + intentName + ", session:" + session);
+    
+    // Dispatch to your skill's intent handlers
+    if ("HaveYouIntent" === intentName) {
+        handleAskChore(intent, session, callback);
+    } else if ("IHaveIntent" === intentName) {
+        console.log("heard yes, see if thats yes I did the chore or yes add the chore:" + session.attributes.EditingChores)
+        if(session.attributes.EditingChores) {
+           handleAddThatChoreRequest(session, callback, intentRequest); 
+        } else {
+           handleAskChore(intent, session, callback);
+        }
+    } else if ("IHaveNotIntent" === intentName) {
+        if(session.attributes.EditingChores) {
+            handleSkipThatChoreRequest(session, callback, intentRequest);
+        } else {
+          handleScreenTimeDenied(intent, session, callback);
+        }
+    } else if ("ScreenIntent" === intentName) {
+        handleAskChore(intent, session, callback);
+    } else if ("AMAZON.HelpIntent" === intentName) {
+        handleHelpRequest(session, callback) // getWelcomeResponse(session, callback, 31); // 2nd param is actually chorelist...FIX
+    } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
+        handleSessionEndRequest(callback);
+    } else if ("ConfigurationIntent" == intentName) {
+        handleConfigurationRequest(session, callback);
+    } else if ("ListChoresIntent" == intentName) {
+        handleListChoresRequest(session, callback);
+    } else if ("AddChoresIntent" == intentName) {
+        handleAddChoresRequest(session, callback, intentRequest);
+    } else if ("AddThatChoreIntent" == intentName) {
+        handleAddThatChoreRequest(session, callback, intentRequest);
+    } else if ("SkipThatChoreIntent" == intentName) {
+        handleSkipThatChoreRequest(session, callback, intentRequest);
+    } else if ("EditChoresIntent" == intentName) {
+        handleGetMasterChoreList(session, callback, intentRequest);
+    } else if ("FinishedAddingChoresIntent" == intentName) {
+        handleFinishedAddingChoresRequest(session, callback);
+    } else if ("EndConfigurationIntent" == intentName) {
+        handleGetChoreList(callback, session);
+    } else if ("SetTimeIntent" == intentName) {
+        handleSetTimeRequest(session, callback, intentRequest);
+    } else if ("GetTimeIntent" == intentName) {
+        handleGetTimeRequest(session, callback, intentRequest);
     } else {
-        tod += "AfternoonChores.txt";
+        throw "Invalid intent";
     }
-    return tod
+}
+
+
+function getTimeOfDay() {
+    var tod = "";
+    var hour = new Date().getHours() - tzOffset;
+    console.log("at getTimeOfDay current_hour:" + current_hour + " offset:" + tzOffset + " hour:"+ hour)
+    if(hour < 0) {  // deal with crossing the day boundary with the TZ 
+        console.log("hour is " + hour + " which becomes " + (hour + 24));
+        hour = hour + 24;
+        current_day = current_day - 1;
+        if(current_day < 1) {
+            current_day = 7;
+        }
+    }
+    current_hour = hour;
+    if(current_day < 1 || current_day > 5) {
+        tod += "Weekend";
+    } else if(current_hour < 12) {
+        tod += "Morning";
+    } else {
+        tod += "Afternoon";
+    }
+    return tod;
 }
 
 // find the timezone file and then use that to call getChoreListInner to find the actual file
-function getChoreList(callback, session) {
-    console.log("at getChoreListOuter which finds the tz file if available and then calls getChoreListInner")
+function handleGetChoreList(callback, session) {
+    console.log("at handleGetChoreList which finds the tz file if available and then calls getChoreListInner");
     var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex');
     const bucket = "lambdaeventsource";
     var keyBase = "MoreScreenTime/";
-    var tzFileName = "tzOffset"
-    var existingUserKey = keyBase + hashed + "/" + tzFileName
+    var tzFileName = "tzOffset";
+    var existingUserKey = keyBase + hashed + "/" + tzFileName;
     
     const s3ExistingUserParams = {
         Bucket: bucket,
         Key: existingUserKey
     };
-//    const s3NewUserParams = {
-//        Bucket: bucket,
-//        Key: keyBase + "Default/" + tzFileName
-//    };
     
     s3.getObject(s3ExistingUserParams, function(err, data) {
         if (err) {
-            console.log("did not find tz file for existing user " + existingUserKey)
-            // use default tzOffset, just call getChoreListInner
-            getChoreListInner(callback, session)
+            console.log("did not find tz file for existing user " + existingUserKey);
+            getChoreListInner(callback, session);
         } else {
             console.log("found tz file for existing user " + existingUserKey);
             console.log("data is " + data);
             getTZFromFile(data); // sets global tzOffset
-            console.log("found tz file for existing user, tzOffset now " + tzOffset)
-            getChoreListInner(callback, session)
+            console.log("found tz file for existing user, tzOffset now " + tzOffset);
+            getChoreListInner(callback, session);
         }
     });
 }
 
 function getChoreListInner(callback, session) {
-    // var tzoffset2 = new Date().getTimezoneOffset()
     console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day + " tzOffset:" + tzOffset);
-    console.log(" " + new Date())
+    console.log(" " + new Date());
     console.log("user id " + session.user.userId);
-    var todChores = getTimeOfDay();
+    var todChores = getTimeOfDay() + "Chores.txt";
     console.log("got time of day file: " + todChores);
     var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex');
     console.log("user id hashed " + hashed); 
     const bucket = "lambdaeventsource";
     var keyBase = "MoreScreenTime/";
-    var keyDefaultUser = "Default"
-    const key = keyBase + keyDefaultUser + todChores
-    const keyExistingUser = keyBase + hashed + "/" + todChores
-    console.log("key is " + key + ", keyExistingUser is " + keyExistingUser)
+    var keyDefaultUser = "Default";
+    const key = keyBase + keyDefaultUser + todChores;
+    const keyExistingUser = keyBase + hashed + "/" + todChores;
+    console.log("key is " + key + ", keyExistingUser is " + keyExistingUser);
     
     const s3ExistingUserParams = {
         Bucket: bucket,
@@ -152,11 +209,10 @@ function getChoreListInner(callback, session) {
 function getTZFromFile(data) {
     var body = data.Body.toString('ascii');
     var dataList = body.split(",");
-    tzOffset = parseInt(dataList[0])
+    tzOffset = parseInt(dataList[0]);
 }
 
 // called twice from getChoreList, once for specific user and once for default
-// TODO: add timezone offset to both default and specific user chore lists
 function getChoresFromFile(callback, data, whichUser) {
     var body = data.Body.toString('ascii');
     var chorelist = body.split(",");
@@ -170,8 +226,8 @@ function getChoresFromFile(callback, data, whichUser) {
     getWelcomeResponse(callback, chorelist, extraTime);  // Dispatch to the skill's launch.
 }
 
-function getMasterChoreList(session, callback, intent) {
-    console.log("at getMasterChoreList");
+function handleGetMasterChoreList(session, callback, intent) {
+    console.log("at handleGetMasterChoreList");
     const bucket = "lambdaeventsource";
     var key1 = "MoreScreenTime/MasterChoreList.txt";
     const key = key1;
@@ -205,68 +261,20 @@ function onSessionStarted(sessionStartedRequest, session) {
  */
 function onLaunch(context, launchRequest, session, callback) {
     console.log("onLaunch requestId=" + launchRequest.requestId + ", sessionId=" + session.sessionId);
-    getChoreList(callback, session);
-}
-
-/**
- * Called when the user specifies an intent for this skill.
- */
-function onIntent(intentRequest, session, callback) {
-    console.log("onIntent requestId=" + intentRequest.requestId + ", sessionId=" + session.sessionId);
-    console.log("intentRequest is:" + intentRequest)
-    
-    var intent = intentRequest.intent,intentName = intentRequest.intent.name;
-    console.log("got intent " + intentName + ", session:" + session);
-    
-    // Dispatch to your skill's intent handlers
-    if ("HaveYouIntent" === intentName) {
-        askChore(intent, session, callback);
-    } else if ("IHaveIntent" === intentName) {
-        askChore(intent, session, callback);
-    } else if ("IHaveNotIntent" === intentName) {
-        screenTimeDenied(intent, session, callback);
-    } else if ("ScreenIntent" === intentName) {
-        askChore(intent, session, callback);
-    } else if ("AMAZON.HelpIntent" === intentName) {
-        handleHelpRequest(session, callback) // getWelcomeResponse(session, callback, 31); // 2nd param is actually chorelist...FIX
-    } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
-        handleSessionEndRequest(callback);
-    } else if ("ConfigurationIntent" == intentName) {
-        handleConfigurationRequest(session, callback);
-    } else if ("ListChoresIntent" == intentName) {
-        handleListChoresRequest(session, callback);
-    } else if ("AddChoresIntent" == intentName) {
-        handleAddChoresRequest(session, callback, intentRequest);
-    } else if ("AddThatChoreIntent" == intentName) {
-        handleAddThatChoreRequest(session, callback, intentRequest);
-    } else if ("SkipThatChoreIntent" == intentName) {
-        handleSkipThatChoreRequest(session, callback, intentRequest);
-    } else if ("EditChoresIntent" == intentName) {
-        getMasterChoreList(session, callback, intentRequest);
-    } else if ("FinishedAddingChoresIntent" == intentName) {
-        handleFinishedAddingChoresRequest(session, callback);
-    } else if ("EndConfigurationIntent" == intentName) {
-        getChoreList(callback, session);
-    } else if ("SetTimeIntent" == intentName) {
-        handleSetTimeRequest(session, callback, intentRequest);
-    } else if ("GetTimeIntent" == intentName) {
-        handleGetTimeRequest(session, callback, intentRequest);
-    } else {
-        throw "Invalid intent";
-    }
+    handleGetChoreList(callback, session);
 }
 
 function handleHelpRequest(session, callback) {
-    
     var cardTitle = "Welcome";
     var repromptText = "something about chores after help";
     var speechOutput = "<p>You start with a default set of chores for morning afternoon and the weekend</p>" +     
       "<p>Answer yes or no about each chore</p>" +
       "<p>If you want to select your own set of chores say configure</p>" +
-      "<p>Amazon does not tell us your time zone so we have guess if its morning or afternoon</p>" +
-      "<p>You can say</p><p> set the time</p><p> to tell us your local time.</p>";
+      "<p>Amazon does not tell us your time zone so we have to guess if its morning or afternoon</p>" +
+      "<p>You can say</p><p> set the time</p><p> to tell us your local time.</p>" +
+      "<p>Do you want to list chores, edit chores, continue or exit</p>";
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
-    callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+    callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, false));
 }
 
 function handleSetTimeRequest(session, callback, intentRequest) {
@@ -278,20 +286,41 @@ function handleSetTimeRequest(session, callback, intentRequest) {
     callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, false));
 }
 
+/**
+ * Called when user tells us the local time.  Parse time and write to S3
+ */ 
 function handleGetTimeRequest(session, callback, intentRequest) {
     console.log("got to handleGetTimeRequest where we get the time value the user said")
-    //console.log("user said1 " + intentRequest.intent.slots);
-    //console.log("user said2 " + intentRequest.intent.slots.LocalTime);
-    //console.log("user said3 " + intentRequest.intent.slots.LocalTime.name);
-    //console.log("user said4 " + intentRequest.intent.slots.LocalTime.toString());
-    console.log("user said5 " + intentRequest.intent.slots.LocalTime.value);
+    var gmt = new Date().getHours()
     var theLocalTime = intentRequest.intent.slots.LocalTime.value
-    // console.log("user said6 " + intentRequest.intent.slots.LocalTime.time);
+
+    var timeString = theLocalTime.split(":");
+    console.log("timeString " + timeString)
+    var localhour = parseInt(timeString[0]);
+    
+    console.log("user said5 " + intentRequest.intent.slots.LocalTime.value + " and GMT is " + gmt);
+    console.log("local hours is " + localhour)
+    // console.log("type of returned object is " + Object.prototype.toString.call(theLocalTime))
+    var offset = gmt - localhour
+    console.log("offset is " + offset)
+
     var cardTitle = "Welcome";
     var repromptText = "something about chores after help";
     var speechOutput = "<p>Thank you for telling us that the local time is " + theLocalTime + " </p>"
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
-    callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+    
+    const bucket = "lambdaeventsource";
+    var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex')
+    const key = "MoreScreenTime/" + hashed + "/"  + "tzOffset"
+    console.log("about to write new tzOffset file " + key + ", " + offset.toString())
+    var s3obj = new aws.S3({params: {Bucket: bucket, Key: key}});
+    s3obj.upload({Body: offset.toString()}, function(err, data) {
+       console.log(err, data); 
+       console.log("finished writing new chores....")
+       callback(session.attributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+    });
+    
+    // callback(session.sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
 }
 
 function handleFinishedAddingChoresRequest(session, callback) {
@@ -311,6 +340,7 @@ function onSessionEnded(sessionEndedRequest, session) {
     console.log("onSessionEnded requestId=" + sessionEndedRequest.requestId + ", sessionId=" + session.sessionId);
 }
 
+// I think this is for the free form chore input that doesn't actually work
 function handleAddChoresRequest(session, callback, intentRequest) {
     var sessionAttributes = {};
     if(session.attributes) {
@@ -318,8 +348,8 @@ function handleAddChoresRequest(session, callback, intentRequest) {
     }
     
     console.log("at handleAddChoresRequest " + intentRequest.intent + " " + intentRequest.intent.slots);
-    console.log("at handleAddChoresRequest2 " + intentRequest.intent.slots.AddNew);
-    console.log("at handleAddChoresRequest3 " + intentRequest.intent.slots.AddNew.value);
+    // console.log("at handleAddChoresRequest2 " + intentRequest.intent.slots.AddNew);
+    // console.log("at handleAddChoresRequest3 " + intentRequest.intent.slots.AddNew.value);
 
     var cardTitle = "Welcome";
     var speechOutput = "<p>You added the chore</p><p>" + intentRequest.intent.slots.AddNew.value + "</p>";
@@ -370,9 +400,11 @@ function handleEditChoresRequest(session, callback, masterchorelist) {
     sessionAttributes.masterchorelist = masterchorelist;
     sessionAttributes.masterchorelistIndex = 0;  
     sessionAttributes.MAX_MASTER_CHORE = MAX_MASTER_CHORE;
+    sessionAttributes.EditingChores = true
     
     var cardTitle = "Welcome";
-    var speechOutput = "<p>We will now build the list of chores you want.</p>"
+    
+    var speechOutput = "<p>We will now build the list of " + getTimeOfDay() + " chores you want.</p>"
     speechOutput += "<p>We will list the possible chores</p><p>after each one please say</p><p>add that chore</p><p>or</p><p>skip that chore</p>";
     speechOutput += "<p>add chore" + masterchorelist[0] + "</p>"
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
@@ -396,14 +428,13 @@ function handleAddThatChoreRequest(session, callback) {
 
     if (typeof sessionAttributes.newchorelist == "undefined")  {
         console.log("no newchorelist yet so initialize to chore: " + sessionAttributes.masterchorelistIndex)
-        // first element of the list is the amount of extra time they can get
+        // first element of the list is the amount of extra time they can get, make that configurable in version 2
         sessionAttributes.newchorelist = "30, " + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
     } else {
         console.log("found newchorelist, adding chore: " + sessionAttributes.masterchorelistIndex)
         sessionAttributes.newchorelist = sessionAttributes.newchorelist + "," + sessionAttributes.masterchorelist[sessionAttributes.masterchorelistIndex]
     }
     console.log("newchorelist now:" + sessionAttributes.newchorelist)
-    
 
     sessionAttributes.masterchorelistIndex = sessionAttributes.masterchorelistIndex + 1
     var cardTitle = "Welcome";
@@ -414,40 +445,32 @@ function handleAddThatChoreRequest(session, callback) {
     console.log("masterchorelistIndex is now " + sessionAttributes.masterchorelistIndex)
     
     if(sessionAttributes.masterchorelistIndex >= sessionAttributes.masterchorelist.length) {
-        console.log("finished configuring chores from the master list, about to write to S3")
+        console.log("finished configuring chores from the master list, about to write to S3");
+        session.attributes.EditingChores = false;
         speechOutput = "You have finished configuring chores from the master list, about to write to S3"
         const bucket = "lambdaeventsource";
         var hashed = require('crypto').createHash('md5').update(session.user.userId).digest('hex')
 
-        // const key = "MoreScreenTime/NewlyConfiguredChores.txt";
-        const key = "MoreScreenTime/" + hashed + "/" + getTimeOfDay()
+        const key = "MoreScreenTime/" + hashed + "/" + getTimeOfDay() + "Chores.txt"
         console.log("about to write new file " + key)
 
         var s3obj = new aws.S3({params: {Bucket: bucket, Key: key}});
-/*        s3obj.upload({Body: sessionAttributes.newchorelist}).
-        on('httpUploadProgress', function(evt) { console.log(evt); }).
-            send(function(err, data) { 
-            console.log(err, data) 
-            callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
-        });
-*/
-        var speechOutput2 = "<speak>" + "finished configuring chores, goodbye" + "</speak>";
+        var speechOutput2 = "<speak>" + "<p>finished configuring chores</p><p>Do you want to list chores, edit chores, continue or exit</p>" + "</speak>";
         
         s3obj.upload({Body: sessionAttributes.newchorelist}, function(err, data) {
            console.log(err, data); 
            console.log("finished writing new chores....")
-           callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
+           callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, false));
         });
-        // console.log("after the write to s3 code block");
-        // callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, true));
     }else {
         var speechOutput2 = "<speak>" + speechOutput + "</speak>";
         console.log("about to ask about next possible chore:" + speechOutput2);
         callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
     }
 }
+
 /**
- * User said "add to chore" in response to listing the chores
+ * User said "skip that chore" in response to listing the chores
  */
 function handleSkipThatChoreRequest(session, callback) {
     var sessionAttributes = {};
@@ -472,7 +495,6 @@ function handleSkipThatChoreRequest(session, callback) {
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput2, repromptText, shouldEndSession));
 }
 
-
 function handleConfigurationRequest(session, callback) {
     console.log("at handleConfigurationRequest");
     var sessionAttributes = {};
@@ -490,7 +512,6 @@ function handleConfigurationRequest(session, callback) {
 // --------------- Functions that control the skill's behavior -----------------------
 
 function getWelcomeResponse(callback, chorelist, extraTime) {
-    // If we wanted to initialize the session to have some attributes we could add those here.
     console.log("at getWelcomeResponse with " + chorelist.length + " chores.");
     var sessionAttributes = {};
     sessionAttributes.chorelist = chorelist;
@@ -511,11 +532,10 @@ function getWelcomeResponse(callback, chorelist, extraTime) {
     speechOutput1 += "<p>Checking your " + dayStr + " chores</p>"
     speechOutput1 += "Have you " + chorelist[0]; 
     var speechOutput = "<speak>" + speechOutput1 + "</speak>";
-    // speechOutput = speechOutput.replace('"', ' ')
     console.log("about to say:" + speechOutput + ".");
     // If the user either does not reply to the welcome message or says something that is not
     // understood, they will be prompted again with this text.
-    var repromptText = "something about chores";
+    var repromptText = "Welcome to MoreScreenTime";
     var shouldEndSession = false;
 
     callback(sessionAttributes, buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
@@ -524,20 +544,19 @@ function getWelcomeResponse(callback, chorelist, extraTime) {
 function handleSessionEndRequest(callback) {
     var cardTitle = "Session Ended";
     var speechOutput = "Thank you for using more screen time";
-    // Setting this to true ends the session and exits the skill.
     var shouldEndSession = true;
 
     callback({}, buildSpeechletResponse(cardTitle, speechOutput, null, shouldEndSession));
 }
 
-function screenTimeDenied(intent, session, callback) {
-    console.log("top of screenTimeDenied intent:" + intent.name);
+function handleScreenTimeDenied(intent, session, callback) {
+    console.log("top of handleScreenTimeDenied intent:" + intent.name);
     var sessionAttributes = {};
     if(session.attributes) {
        sessionAttributes = session.attributes;
     }
     if (typeof sessionAttributes.choreCounter == "undefined")  {
-        console.log("sessionAttributes.choreCounter is undefined in screenTimeDenied");
+        console.log("sessionAttributes.choreCounter is undefined in handleScreenTimeDenied");
         sessionAttributes.choreCounter = 0;
     } else {
         sessionAttributes.choreCounter = sessionAttributes.choreCounter -1
@@ -561,8 +580,8 @@ function screenTimeDenied(intent, session, callback) {
 /**
  * Ask about chores and handle the replies.
  */
-function askChore(intent, session, callback) {
-    console.log("top of askChore intent:" + intent.name);
+function handleAskChore(intent, session, callback) {
+    console.log("top of handleAskChore intent:" + intent.name);
     var cardTitle = "ChoreDressed";
     var sessionAttributes = {};
     var choreCounter = 2;
@@ -595,16 +614,14 @@ function askChore(intent, session, callback) {
        console.log("next ask " + chores[sessionAttributes.choreCounter]);
        var myChore = intent.slots.Chore;
      
-       //sessionAttributes.chores = session.attributes.chores;
        console.log("chore counter = " + sessionAttributes.choreCounter.value);
-       // speechOutput = "have you " + chores[sessionAttributes.choreCounter];
        speechOutput = "have you " + sessionAttributes.chorelist[sessionAttributes.choreCounter];
        sessionAttributes.choreCounter += 1;
     } else {
         speechOutput = "<p>Yes,</p> you may have " + sessionAttributes.extraTime + " more minutes of screen time";
         shouldEndSession = true
     }
-    repromptText = "bla";
+    repromptText = "unexpected";
 
     var speechOutput2 = "<speak>" + speechOutput + "</speak>";
     callback(sessionAttributes,
