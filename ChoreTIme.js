@@ -1,13 +1,16 @@
 var languageStrings = {
     'en': {
         'translation': {
-            'WELCOME'  : "Welcome to More Screen Time, lets see if your child has done their chores<break time='750ms'/> ",
-            'MINI_HELP': "Welcome to More Screen Time, Answer yes, no or they don't have to after each question about your child's chore<break time='500ms'/> ",
-            'HELP'     : "We get chores based on morning, afternoon or weekend and ask if your child has done them.  You say yes or no to each chore.  If your child has done all of" +
-            " their chores they are allowed more screentime, otherwise not.  You can also say, they don't have to.  This means the chore isn't required and we will no longer" +
-            " ask you about it.  You can also say, reset, to get back to the full list of chores<break time='750ms'/> ",
-            'ABOUT'    : "More Screen Time makes a child control their own screen time.",
-            'STOP'     : "Okay, see you next time!"
+            'WELCOME'   : "Welcome to More Screen Time, lets see if your child has done their chores<break time='750ms'/> ",
+            'FIRST_TIME': "Welcome to More Screen Time, Answer yes or no after each question about your child's chores<break time='500ms'/> " +
+            "Say don't have to for a chore that isnt required and we won't ask you about it again<break time='750ms'/>",
+            'MINI_HELP' : "Welcome to More Screen Time, Answer yes, no or they don't have to after each question about your child's chores<break time='500ms'/> ",
+            'HELP'      : "We get chores based on morning, afternoon or weekend and ask if your child has done them,  You say yes or no to each chore," +
+            " If your child has done all oftheir chores they are allowed more screentime, otherwise not,  You can also say, they don't have to," +
+            "This means the chore isn't required and we will no longer" +
+            " ask you about it.  You can also say, reset the chores, to get back to the full list of chores<break time='950ms'/> ",
+            'ABOUT'     : "More Screen Time makes a child control their own screen time.",
+            'STOP'      : "Okay, see you next time!"
         }
     }
     // , 'de-DE': { 'translation' : { 'TITLE'   : "Local Helfer etc." } }
@@ -28,6 +31,7 @@ var dynamoChores = '';
 var todChores = '';
 var choreIndexesToRemove = '';
 var invocation_count = 0;
+var todChores = '';
 
 exports.handler = function(event, context, callback) {
     var alexa = Alexa.handler(event, context);
@@ -99,8 +103,9 @@ var handlers = {
 };
 
 function handleResetChores(emmiter) {
-    console.log("at handleResetChores...not yet implemented");
-    emmiter.emit(':tell', this.t('STOP'));
+    console.log("at handleResetChores");
+    choreIndex = 0;
+    getDefaultChoresFromS3AndWelcomeUser(todChores, emmiter);
 }
 
 function handleSaidYes(emmiter) {
@@ -130,8 +135,8 @@ function handleScreenTimeAllowed(emmiter) {
     emmiter.attributes['lastChoreResult'] = 'allowed';
     emmiter.attributes['invocation_count'] = invocation_count;
     stripChores();
-    ///emmiter.attributes[choreAttribute] = chores;
-    var say = "<p>Your child may have more screen time</p>";
+    emmiter.attributes[choreAttribute] = chores;
+    var say = 'Your child has done all their chores, so <prosody pitch="x-high">yes, they may</prosody><prosody pitch="medium"> have more screen time</prosody>';
     emmiter.emit(':tell', say);
 }
 
@@ -142,8 +147,8 @@ function handleScreenTimeDenied(emmiter) {
     emmiter.attributes['invocation_count'] = invocation_count;
 
     stripChores();
-    ////emmiter.attributes[choreAttribute] = chores;
-    var say = "<p>Your child has not completed all their chores so they may not have more screen time</p>";
+    emmiter.attributes[choreAttribute] = chores;
+    var say = 'Your child has not completed all their chores, so <prosody rate="x-slow">no, they may not </prosody><prosody rate="medium"> have more screen time</prosody>';
     emmiter.emit(':tell', say);
 }
 
@@ -159,6 +164,7 @@ function askAboutAChore(preamble, emmiter) {
 
 // ----------------------- utility methods -----------------------
 
+// get rid of the chores the user say the child does not have to do,  Can get all the chores back by saying "reset the chores"
 function stripChores() {
     var choresRemovedSoFar = 0;
     console.log("about to strip I dont have to chores; original chorelist: " + chores + " choreIndexesToRemove:" + choreIndexesToRemove);
@@ -172,21 +178,25 @@ function stripChores() {
         }
         return 42;  // not sure if I need this just for syntax
     });
+    choreIndexesToRemove = '';
 }
 
+// Alexa reports PST, adjust to CST and hope for the best
 function getTimeOfDay() {
     var tod = "";
-    var hour = new Date().getHours() - tzOffset;
-    console.log("at getTimeOfDay current_hour:" + current_hour + " offset:" + tzOffset + " hour:"+ hour)
-    if(hour < 0) {  // deal with crossing the day boundary with the TZ
-        console.log("hour is " + hour + " which becomes " + (hour + 24));
-        hour = hour + 24;
+    console.log("at getTimeOfDay current_day:" + current_day + " current_hour:" + current_hour +
+        " tzoffset:" + tzOffset + " adjustedHour:" + (current_hour-tzOffset))
+    current_hour -= tzOffset;
+    if(current_hour < 0) {  // deal with crossing the day boundary with the TZ
+        console.log("hour is " + current_hour + " which becomes " + (current_hour + 24));
+        current_hour = current_hour + 24;
         current_day = current_day - 1;
-        if(current_day < 1) {
+        if(current_day > 1) {
             current_day = 7;
         }
     }
-    current_hour = hour;
+    console.log("adjusted current_day:" + current_day + " current_hour:" + current_hour );
+
     if(current_day < 1 || current_day > 5) {
         tod += "Weekend";
     } else if(current_hour < 12) {
@@ -201,8 +211,8 @@ function getTimeOfDay() {
 function getChoreListAndWelcomeUser(emmiter) {
     console.log("about to get chores, hour of the day is " + current_hour + ", day of week is " + current_day + " tzOffset:" + tzOffset);
     console.log(" " + new Date());
-    var todChores = getTimeOfDay() + "Chores.txt";
     dynamoChoresName = getTimeOfDay();
+    todChores = dynamoChoresName + "Chores.txt";
     dynamoChores = emmiter.attributes[dynamoChoresName];
     console.log(dynamoChoresName + " from dynamo got:" + dynamoChores);
     if (typeof dynamoChores == "undefined") {
@@ -214,13 +224,14 @@ function getChoreListAndWelcomeUser(emmiter) {
         askAboutAChore(buildWelcome(emmiter), emmiter);
         return;
     }
+    getDefaultChoresFromS3AndWelcomeUser(todChores, emmiter);
+}
 
-    console.log("got time of day file: " + todChores);
+function getDefaultChoresFromS3AndWelcomeUser(todChores, emmiter) {
     const bucket = "lambdaeventsource";
     var keyBase = "MoreScreenTime/";
     var keyDefaultUser = "Default";
     const key = keyBase + keyDefaultUser + todChores;
-    console.log("key is " + key);
 
     const s3NewUserParams = {
         Bucket: bucket,
@@ -228,24 +239,24 @@ function getChoreListAndWelcomeUser(emmiter) {
     };
 
     console.log("about to get s3 object with chore list for default chores");
-    s3.getObject(s3NewUserParams, function(err, data) {
+    s3.getObject(s3NewUserParams, function (err, data) {
         if (err) {
             console.log("chores not found for default user " + err);
         } else {
-            getChoresFromFileAndWelcomeUser(emmiter, data, key);
+            getChoresFromFileDataAndWelcomeUser(emmiter, data, key);
         }
     });
 }
 
 // called from getChoreList, for default user
-function getChoresFromFileAndWelcomeUser(emmiter, data, whichUser) {
+function getChoresFromFileDataAndWelcomeUser(emmiter, data, whichUser) {
     var body = data.Body.toString('ascii');
     var chorelist = body.split(",");
     console.log("got ChoresFromFile for user " + whichUser );
 
     console.log("about to parse first chore in getChoresFromFile " + chorelist[0] + " dayOfWeek " + current_day);
     var extraTime = 30
-    chorelist.shift();
+    // chorelist.shift();
     chores = chorelist;
     console.log("finished parse, got " + extraTime);
     maxChores = chorelist.length;
@@ -253,11 +264,21 @@ function getChoresFromFileAndWelcomeUser(emmiter, data, whichUser) {
 }
 
 function buildWelcome(emmiter) {
+    if(invocation_count < 3) {
+        return spliceTODintoWelcome(emmiter.t('FIRST_TIME'));
+    }
     var percent = Math.random() * 12;  // a random number between 0 and 12
     console.log('at buildWelcome, percent:' + percent + " invocation_count:" + invocation_count);
     if (invocation_count < percent) {
-        return emmiter.t('MINI_HELP');
+        return spliceTODintoWelcome(emmiter.t('MINI_HELP'));
     } else {
-        return emmiter.t('WELCOME');
+        return spliceTODintoWelcome(emmiter.t('WELCOME'));
     }
+}
+
+function spliceTODintoWelcome(basicWelcome) {
+    index = basicWelcome.indexOf("chores");
+    var splicedWelcome = basicWelcome.slice(0,index) + dynamoChoresName + " " + basicWelcome.slice(index);
+    console.log(splicedWelcome);
+    return(splicedWelcome);
 }
